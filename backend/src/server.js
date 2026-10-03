@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { pool, supabase, query } from './db.js';
+import { syncLeadToAirtable, syncApplicantToAirtable } from './airtable.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -207,6 +208,11 @@ app.post('/api/consultations', async (req, res) => {
        VALUES ($1, $2, $3, $4, $5, 'Online Consultation Booking', 'Consultation Scheduled', NOW())`,
       [name, email, phone, practice_area, `Booked for ${date} at ${time_slot} (${mode})`]
     );
+
+    // Non-blocking sync to Airtable CRM Base
+    syncLeadToAirtable({ name, email, phone, practice_area, date, time_slot, mode, notes }).catch(err => {
+      console.error('[Airtable Sync Err]:', err.message);
+    });
 
     res.status(201).json({ success: true, consultation: result.rows[0] });
   } catch (err) {
@@ -497,6 +503,11 @@ app.post('/api/careers', async (req, res) => {
        RETURNING *`,
       [name, email, phone || '', `Career Application: ${role || 'Legal Counsel'}`, `Exp: ${experience || 'N/A'}. Details: ${resume_notes || 'Submitted via website ATS'}`]
     );
+    // Non-blocking sync to Airtable ATS Base
+    syncApplicantToAirtable({ name, email, phone, role, experience, resume_notes }).catch(err => {
+      console.error('[Airtable Sync Err]:', err.message);
+    });
+
     res.status(201).json({ success: true, applicant: result.rows[0] });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -546,6 +557,35 @@ app.post(['/api/ai/legal-triage', '/api/ai/triage'], (req, res) => {
 
   res.json({ success: true, triage: recommendation, ai_analysis: recommendation });
 });
+
+// ==========================================
+// 10. AIRTABLE STATUS & HEALTH CHECK
+// ==========================================
+app.get('/api/airtable/status', async (req, res) => {
+  const AIRTABLE_PAT = process.env.AIRTABLE_PAT || process.env.AIRTABLE_API_KEY;
+  const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
+
+  if (!AIRTABLE_PAT || !AIRTABLE_BASE_ID) {
+    return res.json({
+      configured: false,
+      message: 'Airtable credentials pending. Provide AIRTABLE_PAT and AIRTABLE_BASE_ID to activate live sync.'
+    });
+  }
+
+  try {
+    const checkRes = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(process.env.AIRTABLE_LEADS_TABLE || 'Leads')}?maxRecords=1`, {
+      headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` }
+    });
+    const data = await checkRes.json();
+    if (!checkRes.ok) {
+      return res.status(400).json({ configured: true, connected: false, error: data });
+    }
+    return res.json({ configured: true, connected: true, message: 'Airtable Base verified and connected successfully!' });
+  } catch (err) {
+    return res.status(500).json({ configured: true, connected: false, error: err.message });
+  }
+});
+
 
 // Start Server (only when not in Vercel serverless function environment)
 if (!process.env.VERCEL) {
