@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
 export default function AdminDashboard() {
   const [activeRole, setActiveRole] = useState('super_admin'); // super_admin, lawyer, paralegal, intern
   const [activeTab, setActiveTab] = useState('matters'); // matters, deadlines, documents, leads, research, intern
@@ -47,7 +49,7 @@ export default function AdminDashboard() {
     setLoginLoading(true);
     setLoginError('');
     try {
-      const res = await fetch('http://localhost:5000/api/auth/login', {
+      const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: emailToUse, password: passToUse })
@@ -72,12 +74,12 @@ export default function AdminDashboard() {
   // Fetch data from backend
   const loadData = () => {
     Promise.all([
-      fetch('http://localhost:5000/api/matters').then(r => r.json()).catch(() => ({ matters: [] })),
-      fetch('http://localhost:5000/api/deadlines').then(r => r.json()).catch(() => ({ deadlines: { overdue: [], today: [], upcoming: [] } })),
-      fetch('http://localhost:5000/api/document-requests').then(r => r.json()).catch(() => ({ requests: [] })),
-      fetch('http://localhost:5000/api/leads').then(r => r.json()).catch(() => ({ leads: [] })),
-      fetch('http://localhost:5000/api/research-tasks').then(r => r.json()).catch(() => ({ tasks: [] })),
-      fetch('http://localhost:5000/api/knowledge-base').then(r => r.json()).catch(() => ({ precedents: [] })),
+      fetch(`${API_BASE_URL}/api/matters`).then(r => r.json()).catch(() => ({ matters: [] })),
+      fetch(`${API_BASE_URL}/api/deadlines`).then(r => r.json()).catch(() => ({ deadlines: { overdue: [], today: [], upcoming: [] } })),
+      fetch(`${API_BASE_URL}/api/document-requests`).then(r => r.json()).catch(() => ({ requests: [] })),
+      fetch(`${API_BASE_URL}/api/leads`).then(r => r.json()).catch(() => ({ leads: [] })),
+      fetch(`${API_BASE_URL}/api/research-tasks`).then(r => r.json()).catch(() => ({ tasks: [] })),
+      fetch(`${API_BASE_URL}/api/knowledge-base`).then(r => r.json()).catch(() => ({ precedents: [] })),
     ]).then(([mattersData, deadlinesData, docsData, leadsData, researchData, kbData]) => {
       setMatters(mattersData.matters || []);
       const allDeadlines = [
@@ -99,7 +101,7 @@ export default function AdminDashboard() {
 
   const handleUpdateDocStatus = async (id, status) => {
     try {
-      await fetch(`http://localhost:5000/api/document-requests/${id}`, {
+      await fetch(`${API_BASE_URL}/api/document-requests/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status })
@@ -794,7 +796,7 @@ export default function AdminDashboard() {
                 <form onSubmit={async (e) => {
                   e.preventDefault();
                   try {
-                    await fetch('http://localhost:5000/api/intern/daily-updates', {
+                    await fetch(`${API_BASE_URL}/api/intern/daily-updates`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ hours_logged: internHours, tasks_completed: internLogText })
@@ -908,7 +910,7 @@ export default function AdminDashboard() {
                 onClick={async () => {
                   if (newMatterTitle) {
                     try {
-                      await fetch('http://localhost:5000/api/matters', {
+                      await fetch(`${API_BASE_URL}/api/matters`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ title: newMatterTitle, category: newMatterCategory, priority: 'Normal' })
@@ -960,7 +962,7 @@ export default function AdminDashboard() {
                 onClick={async () => {
                   if (researchQuestion) {
                     try {
-                      await fetch('http://localhost:5000/api/research-tasks', {
+                      await fetch(`${API_BASE_URL}/api/research-tasks`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({

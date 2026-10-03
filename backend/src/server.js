@@ -533,10 +533,12 @@ app.post('/api/ai/legal-triage', (req, res) => {
   res.json({ success: true, triage: recommendation, ai_analysis: recommendation });
 });
 
-// Start Server
-app.listen(PORT, () => {
-  console.log(`[Rebel Wing Council] Express Backend running on port ${PORT}`);
-  console.log(`Health check: http://localhost:${PORT}/api/health`);
-});
+// Start Server (only when not in Vercel serverless function environment)
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`[Rebel Wing Council] Express Backend running on port ${PORT}`);
+    console.log(`Health check: http://localhost:${PORT}/api/health`);
+  });
+}
 
 export default app;

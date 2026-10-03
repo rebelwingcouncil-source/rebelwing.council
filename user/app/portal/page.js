@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
 export default function ClientPortal() {
   const [matterData, setMatterData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -12,7 +14,7 @@ export default function ClientPortal() {
 
   useEffect(() => {
     // Fetch live matter RWC-2026-0001 from backend
-    fetch('http://localhost:5000/api/matters/RWC-2026-0001')
+    fetch(`${API_BASE_URL}/api/matters/RWC-2026-0001`)
       .then(res => res.json())
       .then(data => {
         if (data.success) {
@@ -26,7 +28,7 @@ export default function ClientPortal() {
 
   const handleFileUpload = async (reqId, fileName) => {
     try {
-      await fetch(`http://localhost:5000/api/document-requests/${reqId}`, {
+      await fetch(`${API_BASE_URL}/api/document-requests/${reqId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'Uploaded' })

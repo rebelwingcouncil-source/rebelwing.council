@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
 export default function HomePage() {
   const [practiceAreas, setPracticeAreas] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -76,7 +78,7 @@ export default function HomePage() {
   };
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/practice-areas')
+    fetch(`${API_BASE_URL}/api/practice-areas`)
       .then(res => res.json())
       .then(data => {
         if (data.success && data.practice_areas.length > 0) {
@@ -105,7 +107,7 @@ export default function HomePage() {
     e.preventDefault();
     setBookingLoading(true);
     try {
-      const res = await fetch('http://localhost:5000/api/consultations', {
+      const res = await fetch(`${API_BASE_URL}/api/consultations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
@@ -126,7 +128,7 @@ export default function HomePage() {
     if (!aiQuery.trim()) return;
     setAiLoading(true);
     try {
-      const res = await fetch('http://localhost:5000/api/ai/legal-triage', {
+      const res = await fetch(`${API_BASE_URL}/api/ai/legal-triage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: aiQuery })
@@ -708,7 +710,7 @@ export default function HomePage() {
               <form onSubmit={async (e) => {
                 e.preventDefault();
                 try {
-                  await fetch('http://localhost:5000/api/careers', {
+                  await fetch(`${API_BASE_URL}/api/careers`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
