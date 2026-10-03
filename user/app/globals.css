@@ -1,0 +1,134 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --primary-navy: #0A192F;
+  --deep-navy: #060F1E;
+  --navy-surface: #10233F;
+  --navy-card: #152B4D;
+  --gold-primary: #C5A869;
+  --gold-light: #E3D1A5;
+  --gold-dark: #9F8246;
+  --cream-bg: #FCFBF8;
+  --cream-surface: #F5F3ED;
+  --text-dark: #0F172A;
+  --text-slate: #475569;
+  --text-muted: #64748B;
+  --border-light: #E2E8F0;
+  --border-gold: rgba(197, 168, 105, 0.35);
+  --border-gold-strong: rgba(197, 168, 105, 0.7);
+  --gold-gradient: linear-gradient(135deg, #C5A869 0%, #DFCA9B 50%, #B89753 100%);
+  --gold-hover: linear-gradient(135deg, #DFCA9B 0%, #EFE1BC 50%, #C5A869 100%);
+  --shadow-sm: 0 2px 8px rgba(10, 25, 47, 0.05);
+  --shadow-md: 0 10px 25px -5px rgba(10, 25, 47, 0.08);
+  --shadow-lg: 0 20px 35px -10px rgba(10, 25, 47, 0.15);
+  --shadow-gold: 0 8px 20px rgba(197, 168, 105, 0.25);
+  --font-serif: 'Cinzel', Georgia, serif;
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  background-color: var(--cream-bg);
+  color: var(--text-dark);
+  font-family: var(--font-sans);
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Base Headings */
+h1, h2, h3, h4, .serif-font {
+  font-family: var(--font-serif);
+  letter-spacing: 0.02em;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+/* Gold Gradient Button */
+.btn-gold {
+  background: var(--gold-gradient);
+  color: var(--deep-navy);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 0.75rem 1.75rem;
+  border-radius: 9999px;
+  border: 1px solid var(--gold-light);
+  box-shadow: var(--shadow-gold);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-gold:hover {
+  background: var(--gold-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(197, 168, 105, 0.35);
+}
+
+.btn-outline-navy {
+  background: transparent;
+  color: var(--primary-navy);
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 0.75rem 1.75rem;
+  border-radius: 9999px;
+  border: 1.5px solid var(--primary-navy);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.btn-outline-navy:hover {
+  background: var(--primary-navy);
+  color: #FFFFFF;
+}
+
+.btn-outline-gold {
+  background: transparent;
+  color: var(--gold-primary);
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 0.75rem 1.75rem;
+  border-radius: 9999px;
+  border: 1.5px solid var(--gold-primary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.btn-outline-gold:hover {
+  background: var(--gold-primary);
+  color: var(--deep-navy);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Container */
+.container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}

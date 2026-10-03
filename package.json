@@ -1,0 +1,12 @@
+{
+  "name": "rebelwing-council",
+  "version": "1.0.0",
+  "description": "Rebel Wing Council - Law | Compliance | Innovation",
+  "private": true,
+  "scripts": {
+    "dev:user": "npm run dev --prefix user",
+    "dev:admin": "npm run dev --prefix admin",
+    "dev:backend": "npm run dev --prefix backend",
+    "test:db": "python backend/test_connection.py"
+  }
+}

@@ -1,0 +1,98 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Cinzel:wght@600;700&display=swap');
+
+:root {
+  --admin-navy: #0A192F;
+  --admin-navy-dark: #060F1E;
+  --admin-navy-surface: #10233F;
+  --admin-gold: #C5A869;
+  --admin-gold-light: #E3D1A5;
+  --admin-gold-dark: #9F8246;
+  --admin-bg: #F8FAFC;
+  --admin-card-bg: #FFFFFF;
+  --admin-text-main: #0F172A;
+  --admin-text-muted: #64748B;
+  --admin-border: #E2E8F0;
+  --admin-border-gold: rgba(197, 168, 105, 0.4);
+  --font-sans: 'Plus Jakarta Sans', -apple-system, sans-serif;
+  --font-serif: 'Cinzel', Georgia, serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--admin-bg);
+  color: var(--admin-text-main);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Badge styles */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.badge-active {
+  background-color: #DCFCE7;
+  color: #15803D;
+}
+
+.badge-warning {
+  background-color: #FEF3C7;
+  color: #B45309;
+}
+
+.badge-urgent {
+  background-color: #FEE2E2;
+  color: #B91C1C;
+}
+
+.badge-info {
+  background-color: #DBEAFE;
+  color: #1D4ED8;
+}
+
+.badge-gold {
+  background-color: rgba(197, 168, 105, 0.15);
+  color: var(--admin-gold-dark);
+  border: 1px solid var(--admin-border-gold);
+}
+
+/* Table styles */
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.admin-table th {
+  text-align: left;
+  padding: 0.75rem 1rem;
+  background-color: #F1F5F9;
+  color: var(--admin-text-muted);
+  font-weight: 600;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.admin-table td {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--admin-border);
+  color: var(--admin-text-main);
+}
+
+.admin-table tr:hover {
+  background-color: #F8FAFC;
+}

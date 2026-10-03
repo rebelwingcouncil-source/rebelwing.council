@@ -1,0 +1,370 @@
+import express from 'express';
+import cors from 'cors';
+import morgan from 'morgan';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { pool, supabase, query } from './db.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// Middleware
+app.use(cors({
+  origin: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002'],
+  credentials: true
+}));
+app.use(express.json());
+app.use(morgan('dev'));
+
+// ==========================================
+// 1. HEALTH & SYSTEM STATS
+// ==========================================
+app.get('/api/health', async (req, res) => {
+  try {
+    const dbRes = await query('SELECT NOW()');
+    res.json({
+      status: 'healthy',
+      service: 'Rebel Wing Council Operating System Backend',
+      database: 'connected',
+      db_time: dbRes.rows[0].now,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    res.status(500).json({ status: 'degraded', error: err.message });
+  }
+});
+
+// Admin Dashboard Summary Metrics
+app.get('/api/stats', async (req, res) => {
+  try {
+    const [clientsRes, mattersRes, tasksRes, deadlinesRes, leadsRes, researchRes] = await Promise.all([
+      query("SELECT COUNT(*) FROM profiles WHERE role = 'client'"),
+      query("SELECT COUNT(*) FROM matters WHERE status = 'Active'"),
+      query("SELECT COUNT(*) FROM tasks WHERE status != 'Completed'"),
+      query("SELECT COUNT(*) FROM deadlines WHERE due_date <= CURRENT_DATE + INTERVAL '7 days' AND is_completed = FALSE"),
+      query("SELECT COUNT(*) FROM leads WHERE status = 'New'"),
+      query("SELECT COUNT(*) FROM legal_research_tasks WHERE status != 'Approved'")
+    ]);
+
+    res.json({
+      success: true,
+      stats: {
+        total_clients: parseInt(clientsRes.rows[0].count),
+        active_matters: parseInt(mattersRes.rows[0].count),
+        pending_tasks: parseInt(tasksRes.rows[0].count),
+        urgent_deadlines: parseInt(deadlinesRes.rows[0].count),
+        new_leads: parseInt(leadsRes.rows[0].count),
+        active_research: parseInt(researchRes.rows[0].count),
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
+// 2. PRACTICE AREAS
+// ==========================================
+app.get('/api/practice-areas', async (req, res) => {
+  try {
+    const result = await query('SELECT * FROM practice_areas WHERE is_active = TRUE ORDER BY name ASC');
+    res.json({ success: true, practice_areas: result.rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
+// 3. LEADS & CRM INGESTION
+// ==========================================
+app.post('/api/leads', async (req, res) => {
+  const { name, email, phone, service, message, source, practice_area_id } = req.body;
+  if (!name || !email || !phone) {
+    return res.status(400).json({ success: false, error: 'Name, email, and phone are required.' });
+  }
+  try {
+    const result = await query(
+      `INSERT INTO leads (name, email, phone, service, practice_area_id, message, source, status, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'New', NOW())
+       RETURNING *`,
+      [name, email, phone, service || 'General Consultation', practice_area_id || null, message || '', source || 'Website Enquiry']
+    );
+    res.status(201).json({ success: true, lead: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/leads', async (req, res) => {
+  try {
+    const result = await query(`
+      SELECT l.*, pa.name as practice_area_name, p.full_name as assigned_lawyer_name
+      FROM leads l
+      LEFT JOIN practice_areas pa ON l.practice_area_id = pa.id
+      LEFT JOIN profiles p ON l.assigned_lawyer_id = p.id
+      ORDER BY l.created_at DESC
+    `);
+    res.json({ success: true, leads: result.rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
+// 4. CONSULTATIONS
+// ==========================================
+app.post('/api/consultations', async (req, res) => {
+  const { name, email, phone, date, time_slot, mode, practice_area, notes } = req.body;
+  if (!name || !email || !phone || !date || !time_slot) {
+    return res.status(400).json({ success: false, error: 'Name, email, phone, date, and time slot are required.' });
+  }
+  try {
+    const result = await query(
+      `INSERT INTO consultations (client_name, email, phone, consultation_date, time_slot, mode, practice_area, notes, status, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Scheduled', NOW())
+       RETURNING *`,
+      [name, email, phone, date, time_slot, mode || 'Online', practice_area || 'General Legal Advice', notes || '']
+    );
+
+    await query(
+      `INSERT INTO leads (name, email, phone, service, message, source, status, created_at)
+       VALUES ($1, $2, $3, $4, $5, 'Online Consultation Booking', 'Consultation Scheduled', NOW())`,
+      [name, email, phone, practice_area || 'Consultation', `Booked for ${date} at ${time_slot} (${mode})`]
+    );
+
+    res.status(201).json({ success: true, consultation: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
+// 5. MATTERS & CASE REGISTRY
+// ==========================================
+app.get('/api/matters', async (req, res) => {
+  try {
+    const result = await query(`
+      SELECT m.*, 
+             c.full_name as client_name, c.email as client_email, c.organization_name,
+             l.full_name as lawyer_name,
+             pa.name as practice_area_name
+      FROM matters m
+      LEFT JOIN profiles c ON m.client_id = c.id
+      LEFT JOIN profiles l ON m.assigned_lawyer_id = l.id
+      LEFT JOIN practice_areas pa ON m.practice_area_id = pa.id
+      ORDER BY m.opened_date DESC
+    `);
+    res.json({ success: true, matters: result.rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/matters/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const matterRes = await query(`
+      SELECT m.*, 
+             c.full_name as client_name, c.email as client_email, c.phone as client_phone, c.organization_name,
+             l.full_name as lawyer_name, l.email as lawyer_email,
+             pa.name as practice_area_name
+      FROM matters m
+      LEFT JOIN profiles c ON m.client_id = c.id
+      LEFT JOIN profiles l ON m.assigned_lawyer_id = l.id
+      LEFT JOIN practice_areas pa ON m.practice_area_id = pa.id
+      WHERE m.id = $1 OR m.matter_id = $1
+    `, [id]);
+
+    if (matterRes.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Matter not found' });
+    }
+
+    const matter = matterRes.rows[0];
+
+    const [milestonesRes, tasksRes, docRequestsRes, deadlinesRes] = await Promise.all([
+      query('SELECT * FROM matter_milestones WHERE matter_id = $1 ORDER BY step_number ASC', [matter.id]),
+      query('SELECT * FROM tasks WHERE matter_id = $1 ORDER BY deadline ASC', [matter.id]),
+      query('SELECT * FROM document_requests WHERE matter_id = $1 ORDER BY created_at ASC', [matter.id]),
+      query('SELECT * FROM deadlines WHERE matter_id = $1 ORDER BY due_date ASC', [matter.id]),
+    ]);
+
+    res.json({
+      success: true,
+      matter,
+      milestones: milestonesRes.rows,
+      tasks: tasksRes.rows,
+      document_requests: docRequestsRes.rows,
+      deadlines: deadlinesRes.rows
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
+// 6. LEGAL CALENDAR & DEADLINES
+// ==========================================
+app.get('/api/deadlines', async (req, res) => {
+  try {
+    const result = await query(`
+      SELECT d.*, m.matter_id as code, m.title as matter_title,
+             p.full_name as lawyer_name
+      FROM deadlines d
+      LEFT JOIN matters m ON d.matter_id = m.id
+      LEFT JOIN profiles p ON d.assigned_lawyer_id = p.id
+      ORDER BY d.due_date ASC
+    `);
+
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+
+    const overdue = [];
+    const today = [];
+    const upcoming = [];
+
+    result.rows.forEach(d => {
+      const dStr = new Date(d.due_date).toISOString().split('T')[0];
+      if (dStr < todayStr && !d.is_completed) {
+        overdue.push(d);
+      } else if (dStr === todayStr) {
+        today.push(d);
+      } else {
+        upcoming.push(d);
+      }
+    });
+
+    res.json({
+      success: true,
+      summary: {
+        total: result.rows.length,
+        overdue_count: overdue.length,
+        today_count: today.length,
+      },
+      deadlines: {
+        overdue,
+        today,
+        upcoming
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
+// 7. CLIENT DOCUMENT REQUESTS
+// ==========================================
+app.get('/api/document-requests', async (req, res) => {
+  try {
+    const result = await query(`
+      SELECT dr.*, m.matter_id as code, m.title as matter_title,
+             c.full_name as client_name
+      FROM document_requests dr
+      LEFT JOIN matters m ON dr.matter_id = m.id
+      LEFT JOIN profiles c ON dr.client_id = c.id
+      ORDER BY dr.created_at DESC
+    `);
+    res.json({ success: true, requests: result.rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.patch('/api/document-requests/:id', async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+  try {
+    const result = await query(
+      'UPDATE document_requests SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
+      [status, id]
+    );
+    res.json({ success: true, request: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
+// 8. LEGAL RESEARCH & KNOWLEDGE BASE
+// ==========================================
+app.get('/api/research-tasks', async (req, res) => {
+  try {
+    const result = await query(`
+      SELECT rt.*, m.matter_id as code, m.title as matter_title,
+             p.full_name as assigned_to_name
+      FROM legal_research_tasks rt
+      LEFT JOIN matters m ON rt.matter_id = m.id
+      LEFT JOIN profiles p ON rt.assigned_to = p.id
+      ORDER BY rt.deadline ASC
+    `);
+    res.json({ success: true, tasks: result.rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/knowledge-base', async (req, res) => {
+  try {
+    const result = await query('SELECT * FROM knowledge_base ORDER BY created_at DESC');
+    res.json({ success: true, precedents: result.rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
+// 9. AI LEGAL ASSISTANT & CONTRACT REVIEW
+// ==========================================
+app.post('/api/ai/legal-triage', (req, res) => {
+  const { query: userQuery } = req.body;
+  const qLower = (userQuery || '').toLowerCase();
+
+  let recommendation = {
+    category: 'Corporate & Commercial Law',
+    suggested_advocate: 'Adv. Priya Deshmukh (Partner)',
+    estimated_timeline: '2-4 weeks',
+    key_requirements: ['Certificate of Incorporation', 'Board Resolution', 'Prior Agreements'],
+    ai_guidance: 'Based on your query, we recommend a preliminary corporate review to ensure statutory compliance with MCA and relevant authority guidelines.'
+  };
+
+  if (qLower.includes('trademark') || qLower.includes('patent') || qLower.includes('copyright') || qLower.includes('brand')) {
+    recommendation = {
+      category: 'Intellectual Property Rights',
+      suggested_advocate: 'Adv. Rajeshwar Sharma (Managing Partner)',
+      estimated_timeline: '3-6 months (Statutory publication stage)',
+      key_requirements: ['Logo artwork in high-res', 'Date of first use in commerce', 'Power of Attorney (Form TM-48)'],
+      ai_guidance: 'Prior to trademark application, our team conducts a comprehensive phonetics and class search across the Indian Trade Marks Registry.'
+    };
+  } else if (qLower.includes('court') || qLower.includes('dispute') || qLower.includes('arbitration') || qLower.includes('notice')) {
+    recommendation = {
+      category: 'Litigation & Dispute Resolution',
+      suggested_advocate: 'Adv. Vikramaditya Rathore (Head of Litigation)',
+      estimated_timeline: 'Immediate (15-day statutory reply window for legal notices)',
+      key_requirements: ['Original notice/summons received', 'Contract containing dispute clause', 'Correspondence trail'],
+      ai_guidance: 'For legal notices and dispute filings, swift action is essential to preserve your statutory defence and avoid ex-parte proceedings.'
+    };
+  } else if (qLower.includes('plastic') || qLower.includes('epr') || qLower.includes('environment') || qLower.includes('battery')) {
+    recommendation = {
+      category: 'Environmental & EPR Compliance',
+      suggested_advocate: 'Neha Verma (Senior Legal Executive)',
+      estimated_timeline: '3-4 weeks for CPCB centralized portal approval',
+      key_requirements: ['Producer/Brand Owner sales records', 'Authorized recyclers agreement', 'SPCB consent to operate'],
+      ai_guidance: 'EPR registration is mandatory under MOEFCC guidelines. Non-compliance invites substantial environmental compensation under the CPCB portal.'
+    };
+  }
+
+  res.json({ success: true, triage: recommendation });
+});
+
+// Start Server
+app.listen(PORT, () => {
+  console.log(`[Rebel Wing Council] Express Backend running on port ${PORT}`);
+  console.log(`Health check: http://localhost:${PORT}/api/health`);
+});
+
+export default app;
