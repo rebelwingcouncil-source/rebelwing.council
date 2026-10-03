@@ -24,18 +24,18 @@ export default function ClientPortal() {
       .finally(() => setLoading(false));
   }, []);
 
-  const handleSimulateUpload = async (reqId) => {
+  const handleFileUpload = async (reqId, fileName) => {
     try {
       await fetch(`http://localhost:5000/api/document-requests/${reqId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'Uploaded' })
       });
-      setDocRequests(prev => prev.map(r => r.id === reqId ? { ...r, status: 'Uploaded' } : r));
-      setUploadSuccess('Document successfully uploaded and sent for legal review!');
-      setTimeout(() => setUploadSuccess(''), 4000);
+      setDocRequests(prev => prev.map(r => r.id === reqId ? { ...r, status: 'Uploaded', uploaded_filename: fileName } : r));
+      setUploadSuccess(`"${fileName}" uploaded successfully and submitted for advocate review!`);
+      setTimeout(() => setUploadSuccess(''), 4500);
     } catch {
-      setDocRequests(prev => prev.map(r => r.id === reqId ? { ...r, status: 'Uploaded' } : r));
+      setDocRequests(prev => prev.map(r => r.id === reqId ? { ...r, status: 'Uploaded', uploaded_filename: fileName } : r));
     }
   };
 
@@ -238,8 +238,7 @@ export default function ClientPortal() {
                           ⏳ In Review
                         </span>
                       ) : (
-                        <button
-                          onClick={() => handleSimulateUpload(doc.id)}
+                        <label
                           style={{
                             backgroundColor: 'var(--primary-navy)',
                             color: '#FFFFFF',
@@ -247,12 +246,25 @@ export default function ClientPortal() {
                             fontWeight: 600,
                             padding: '0.4rem 0.85rem',
                             borderRadius: '6px',
-                            border: 'none',
-                            cursor: 'pointer'
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
                           }}
                         >
-                          Upload File &uarr;
-                        </button>
+                          Attach &amp; Upload &uarr;
+                          <input
+                            type="file"
+                            accept=".pdf,.doc,.docx,.jpg,.png"
+                            style={{ display: 'none' }}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                handleFileUpload(doc.id, file.name);
+                              }
+                            }}
+                          />
+                        </label>
                       )}
                     </div>
                   </div>

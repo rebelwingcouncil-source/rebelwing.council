@@ -32,6 +32,12 @@ export default function HomePage() {
   // ATS Career State
   const [careerType, setCareerType] = useState('executive');
   const [careerSubmitted, setCareerSubmitted] = useState(false);
+  const [careerFormData, setCareerFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    qualification: ''
+  });
 
   // Fee Calculator Data
   const feeEstimates = {
@@ -699,25 +705,72 @@ export default function HomePage() {
                 </p>
               </div>
             ) : (
-              <form onSubmit={(e) => { e.preventDefault(); setCareerSubmitted(true); }}>
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                try {
+                  await fetch('http://localhost:5000/api/careers', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      name: careerFormData.name,
+                      email: careerFormData.email,
+                      phone: careerFormData.phone,
+                      role: careerType === 'executive' ? 'Legal Executive' : 'Internship Applicant',
+                      experience: careerFormData.qualification,
+                      resume_notes: `Application for ${careerType}`
+                    })
+                  });
+                } catch (err) {
+                  console.error('Error submitting application:', err);
+                }
+                setCareerSubmitted(true);
+              }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', marginBottom: '1.25rem' }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.35rem' }}>Full Name *</label>
-                    <input required type="text" placeholder="Adv. / Mr. / Ms." style={{ width: '100%', padding: '0.7rem', borderRadius: '8px', border: '1px solid var(--border-light)' }} />
+                    <input
+                      required
+                      type="text"
+                      placeholder="Adv. / Mr. / Ms."
+                      value={careerFormData.name}
+                      onChange={e => setCareerFormData(prev => ({ ...prev, name: e.target.value }))}
+                      style={{ width: '100%', padding: '0.7rem', borderRadius: '8px', border: '1px solid var(--border-light)' }}
+                    />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.35rem' }}>Email Address *</label>
-                    <input required type="email" placeholder="name@email.com" style={{ width: '100%', padding: '0.7rem', borderRadius: '8px', border: '1px solid var(--border-light)' }} />
+                    <input
+                      required
+                      type="email"
+                      placeholder="name@email.com"
+                      value={careerFormData.email}
+                      onChange={e => setCareerFormData(prev => ({ ...prev, email: e.target.value }))}
+                      style={{ width: '100%', padding: '0.7rem', borderRadius: '8px', border: '1px solid var(--border-light)' }}
+                    />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.35rem' }}>Contact Number *</label>
-                    <input required type="tel" placeholder="+91 XXXXX XXXXX" style={{ width: '100%', padding: '0.7rem', borderRadius: '8px', border: '1px solid var(--border-light)' }} />
+                    <input
+                      required
+                      type="tel"
+                      placeholder="+91 XXXXX XXXXX"
+                      value={careerFormData.phone}
+                      onChange={e => setCareerFormData(prev => ({ ...prev, phone: e.target.value }))}
+                      style={{ width: '100%', padding: '0.7rem', borderRadius: '8px', border: '1px solid var(--border-light)' }}
+                    />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.35rem' }}>
                       {careerType === 'executive' ? 'Bar Council Roll No.' : 'Law University / College'} *
                     </label>
-                    <input required type="text" placeholder={careerType === 'executive' ? 'e.g. D/1234/2020' : 'e.g. NLU Delhi'} style={{ width: '100%', padding: '0.7rem', borderRadius: '8px', border: '1px solid var(--border-light)' }} />
+                    <input
+                      required
+                      type="text"
+                      placeholder={careerType === 'executive' ? 'e.g. D/1234/2020' : 'e.g. NLU Delhi'}
+                      value={careerFormData.qualification}
+                      onChange={e => setCareerFormData(prev => ({ ...prev, qualification: e.target.value }))}
+                      style={{ width: '100%', padding: '0.7rem', borderRadius: '8px', border: '1px solid var(--border-light)' }}
+                    />
                   </div>
                 </div>
 

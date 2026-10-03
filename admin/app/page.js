@@ -599,7 +599,21 @@ export default function AdminDashboard() {
                   </div>
                 )}
 
-                <form onSubmit={e => { e.preventDefault(); setInternLogSuccess(true); setTimeout(() => setInternLogSuccess(false), 4000); }}>
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  try {
+                    await fetch('http://localhost:5000/api/intern/daily-updates', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ hours_logged: internHours, tasks_completed: internLogText })
+                    });
+                    setInternLogSuccess(true);
+                    setInternLogText('');
+                    setTimeout(() => setInternLogSuccess(false), 4000);
+                  } catch (err) {
+                    console.error('Intern update error:', err);
+                  }
+                }}>
                   <div style={{ marginBottom: '1rem' }}>
                     <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.3rem' }}>Hours Logged Today</label>
                     <input
@@ -699,20 +713,18 @@ export default function AdminDashboard() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
               <button onClick={() => setIsNewMatterOpen(false)} style={{ padding: '0.5rem 1rem', border: '1px solid var(--admin-border)', background: 'transparent', borderRadius: '8px', cursor: 'pointer' }}>Cancel</button>
               <button
-                onClick={() => {
+                onClick={async () => {
                   if (newMatterTitle) {
-                    setMatters(prev => [
-                      ...prev,
-                      {
-                        matter_id: `RWC-2026-000${prev.length + 1}`,
-                        title: newMatterTitle,
-                        category: newMatterCategory,
-                        client_name: 'Acme Holdings',
-                        lawyer_name: 'Adv. Priya Deshmukh',
-                        priority: 'Normal',
-                        status: 'Active'
-                      }
-                    ]);
+                    try {
+                      await fetch('http://localhost:5000/api/matters', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ title: newMatterTitle, category: newMatterCategory, priority: 'Normal' })
+                      });
+                      loadData();
+                    } catch (err) {
+                      console.error('Error creating matter:', err);
+                    }
                     setIsNewMatterOpen(false);
                     setNewMatterTitle('');
                   }
@@ -753,19 +765,22 @@ export default function AdminDashboard() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
               <button onClick={() => setIsNewResearchOpen(false)} style={{ padding: '0.5rem 1rem', border: '1px solid var(--admin-border)', background: 'transparent', borderRadius: '8px', cursor: 'pointer' }}>Cancel</button>
               <button
-                onClick={() => {
+                onClick={async () => {
                   if (researchQuestion) {
-                    setResearchTasks(prev => [
-                      ...prev,
-                      {
-                        research_question: researchQuestion,
-                        relevant_legislation: researchAct,
-                        jurisdiction: 'High Court of Delhi',
-                        assigned_to_name: 'Arjun Mehta (Intern)',
-                        deadline: new Date(Date.now() + 4 * 86400000).toISOString(),
-                        status: 'Assigned'
-                      }
-                    ]);
+                    try {
+                      await fetch('http://localhost:5000/api/research-tasks', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          research_question: researchQuestion,
+                          relevant_legislation: researchAct,
+                          jurisdiction: 'High Court of Delhi'
+                        })
+                      });
+                      loadData();
+                    } catch (err) {
+                      console.error('Error assigning research task:', err);
+                    }
                     setIsNewResearchOpen(false);
                     setResearchQuestion('');
                   }

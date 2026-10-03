@@ -215,6 +215,49 @@ app.get('/api/matters/:id', async (req, res) => {
   }
 });
 
+app.post('/api/matters', async (req, res) => {
+  const { title, category, priority, client_name } = req.body;
+  if (!title) {
+    return res.status(400).json({ success: false, error: 'Matter title is required.' });
+  }
+  try {
+    const countRes = await query('SELECT count(*) FROM matters');
+    const num = parseInt(countRes.rows[0].count) + 1;
+    const matter_id = `RWC-2026-${String(num).padStart(4, '0')}`;
+
+    const clientRes = await query("SELECT id FROM profiles WHERE role = 'client' LIMIT 1");
+    const lawyerRes = await query("SELECT id FROM profiles WHERE role = 'lawyer' LIMIT 1");
+    const paRes = await query("SELECT id FROM practice_areas LIMIT 1");
+
+    const clientId = clientRes.rows[0]?.id;
+    const lawyerId = lawyerRes.rows[0]?.id;
+    const paId = paRes.rows[0]?.id;
+
+    const result = await query(
+      `INSERT INTO matters (matter_id, title, category, priority, status, client_id, assigned_lawyer_id, practice_area_id, opened_date, created_at)
+       VALUES ($1, $2, $3, $4, 'Active', $5, $6, $7, CURRENT_DATE, NOW())
+       RETURNING *`,
+      [matter_id, title, category || 'General Corporate', priority || 'Normal', clientId, lawyerId, paId]
+    );
+
+    const newMatter = result.rows[0];
+
+    // Seed 5 standard milestones
+    await query(`
+      INSERT INTO matter_milestones (matter_id, step_number, title, description, status) VALUES
+      ($1, 1, 'Initial Legal Intake', 'Case onboarding and document collection', 'in_progress'),
+      ($1, 2, 'Statutory & Case Law Research', 'Research precedents and legal strategy', 'pending'),
+      ($1, 3, 'Pleadings & Agreement Drafting', 'Draft petition / agreement for client review', 'pending'),
+      ($1, 4, 'Filing / Regulatory Submission', 'Submit to relevant tribunal / authority', 'pending'),
+      ($1, 5, 'Final Disposition & Order', 'Obtain final order or closing documentation', 'pending')
+    `, [newMatter.id]);
+
+    res.status(201).json({ success: true, matter: newMatter });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ==========================================
 // 6. LEGAL CALENDAR & DEADLINES
 // ==========================================
@@ -326,6 +369,77 @@ app.get('/api/knowledge-base', async (req, res) => {
   }
 });
 
+app.post('/api/research-tasks', async (req, res) => {
+  const { research_question, relevant_legislation, jurisdiction, assigned_to_name, deadline } = req.body;
+  if (!research_question) {
+    return res.status(400).json({ success: false, error: 'Research question is required.' });
+  }
+  try {
+    const internRes = await query("SELECT id FROM profiles WHERE role = 'intern' LIMIT 1");
+    const lawyerRes = await query("SELECT id FROM profiles WHERE role = 'super_admin' LIMIT 1");
+    const matterRes = await query("SELECT id FROM matters LIMIT 1");
+
+    const result = await query(
+      `INSERT INTO legal_research_tasks (matter_id, research_question, relevant_legislation, jurisdiction, assigned_to, assigned_by, deadline, status, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'Assigned', NOW())
+       RETURNING *`,
+      [
+        matterRes.rows[0]?.id,
+        research_question,
+        relevant_legislation || 'Companies Act, 2013 / Precedents',
+        jurisdiction || 'High Court of Delhi',
+        internRes.rows[0]?.id,
+        lawyerRes.rows[0]?.id,
+        deadline ? deadline.split('T')[0] : new Date(Date.now() + 5 * 86400000).toISOString().split('T')[0]
+      ]
+    );
+    res.status(201).json({ success: true, task: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/intern/daily-updates', async (req, res) => {
+  const { hours_logged, tasks_completed, challenges_faced } = req.body;
+  if (!tasks_completed) {
+    return res.status(400).json({ success: false, error: 'Tasks completed description is required.' });
+  }
+  try {
+    const internRes = await query("SELECT id FROM profiles WHERE role = 'intern' LIMIT 1");
+    const internId = internRes.rows[0]?.id;
+    if (!internId) {
+      return res.status(400).json({ success: false, error: 'Intern profile not found' });
+    }
+    const result = await query(
+      `INSERT INTO daily_work_updates (intern_id, work_date, hours_logged, tasks_completed, challenges_faced, created_at)
+       VALUES ($1, CURRENT_DATE, $2, $3, $4, NOW())
+       RETURNING *`,
+      [internId, parseFloat(hours_logged || '8.0'), tasks_completed, challenges_faced || '']
+    );
+    res.status(201).json({ success: true, update: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/careers', async (req, res) => {
+  const { name, email, phone, role, experience, resume_notes } = req.body;
+  if (!name || !email) {
+    return res.status(400).json({ success: false, error: 'Name and email are required.' });
+  }
+  try {
+    const result = await query(
+      `INSERT INTO leads (name, email, phone, service, message, source, status, created_at)
+       VALUES ($1, $2, $3, $4, $5, 'Career ATS Application', 'New', NOW())
+       RETURNING *`,
+      [name, email, phone || '', `Career Application: ${role || 'Legal Counsel'}`, `Exp: ${experience || 'N/A'}. Details: ${resume_notes || 'Submitted via website ATS'}`]
+    );
+    res.status(201).json({ success: true, applicant: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ==========================================
 // 9. AI LEGAL ASSISTANT & CONTRACT REVIEW
 // ==========================================
@@ -367,7 +481,7 @@ app.post('/api/ai/legal-triage', (req, res) => {
     };
   }
 
-  res.json({ success: true, triage: recommendation });
+  res.json({ success: true, triage: recommendation, ai_analysis: recommendation });
 });
 
 // Start Server

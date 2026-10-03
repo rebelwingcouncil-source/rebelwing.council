@@ -54,6 +54,28 @@ tests = [
         "preferred_time": "14:00",
         "notes": "Automated smoke test verification for consultation booking"
     }),
+    ("Create Legal Matter API", "http://localhost:5000/api/matters", "POST", {
+        "title": "Smoke Test Trademark Defense Action",
+        "category": "Intellectual Property Rights",
+        "priority": "High"
+    }),
+    ("Assign Legal Research Task API", "http://localhost:5000/api/research-tasks", "POST", {
+        "research_question": "Test Question: Injunction standards under Commercial Courts Act 2015",
+        "relevant_legislation": "Commercial Courts Act, 2015",
+        "jurisdiction": "High Court of Bombay"
+    }),
+    ("Intern Daily Log Submission API", "http://localhost:5000/api/intern/daily-updates", "POST", {
+        "hours_logged": 8.0,
+        "tasks_completed": "Smoke test automated work log: verified Indian Kanoon and Supreme Court precedents."
+    }),
+    ("Career ATS Application API", "http://localhost:5000/api/careers", "POST", {
+        "name": "Test Candidate Advocate",
+        "email": "candidate@lawtest.com",
+        "phone": "+91 99887 76655",
+        "role": "Senior Legal Associate",
+        "experience": "5 Years PQE Commercial Litigation",
+        "resume_notes": "Submitted via automated test suite"
+    }),
 
     # 2. Frontend Applications
     ("User App: Landing Page (Port 3000)", "http://localhost:3000", "GET", None),
@@ -72,7 +94,9 @@ for name, url, method, data in tests:
         passed += 1
         print(f"  [PASS] {name:<45} -> {status_str} ({timing})")
         if "data" in res and isinstance(res["data"], dict) and "ai_analysis" in res["data"]:
-            print(f"         > AI Assessment: {res['data']['ai_analysis']['urgency']} urgency | {res['data']['ai_analysis']['forum']}")
+            category = res['data']['ai_analysis'].get('category', 'Legal Advisory')
+            advocate = res['data']['ai_analysis'].get('suggested_advocate', 'Partner')
+            print(f"         > AI Triage: {category} | Suggested Counsel: {advocate}")
         elif "data" in res and isinstance(res["data"], dict) and "firm_name" in res["data"]:
             print(f"         > DB Status: {res['data']['database']['status']} | Active Matters: {res['data']['stats']['active_matters']}")
     else:
