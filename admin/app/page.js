@@ -399,8 +399,17 @@ export default function AdminDashboard() {
 
         {/* User Info / Profile in Sidebar Footer */}
         <div style={{ padding: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)', fontSize: '0.75rem', color: '#94A3B8' }}>
-          <div>Connected to Supabase DB:</div>
+          <div>Database & Storage:</div>
           <div style={{ color: '#22C55E', fontWeight: 600 }}>● PostgreSQL 17.11 Live</div>
+          <div style={{ marginTop: '0.35rem' }}>Airtable Base Sync:</div>
+          <a
+            href="https://airtable.com/applCjQYUgSTHSXcg"
+            target="_blank"
+            rel="noreferrer"
+            style={{ color: '#38BDF8', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+          >
+            ● Rebelwing Base Live ↗
+          </a>
         </div>
       </aside>
 
@@ -671,9 +680,31 @@ export default function AdminDashboard() {
           {/* TAB 4: LEADS & CRM */}
           {activeTab === 'leads' && activeRole !== 'intern' && (
             <div style={{ backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid var(--admin-border)', overflow: 'hidden' }}>
-              <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--admin-border)' }}>
-                <h2 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--admin-navy)' }}>Website Inquiries &amp; Consultation Leads</h2>
-                <div style={{ fontSize: '0.75rem', color: 'var(--admin-text-muted)' }}>Automatically ingested from website consultation scheduler</div>
+              <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--admin-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h2 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--admin-navy)' }}>Website Inquiries &amp; Consultation Leads</h2>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--admin-text-muted)' }}>Automatically ingested from website consultation scheduler &amp; synced to Airtable</div>
+                </div>
+                <a
+                  href="https://airtable.com/applCjQYUgSTHSXcg"
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    backgroundColor: '#0284C7',
+                    color: '#FFFFFF',
+                    padding: '0.45rem 0.9rem',
+                    borderRadius: '8px',
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    textDecoration: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                  }}
+                >
+                  ⚡ Open in Airtable CRM ↗
+                </a>
               </div>
 
               {leads.length === 0 ? (

@@ -562,8 +562,8 @@ app.post(['/api/ai/legal-triage', '/api/ai/triage'], (req, res) => {
 // 10. AIRTABLE STATUS & HEALTH CHECK
 // ==========================================
 app.get('/api/airtable/status', async (req, res) => {
-  const AIRTABLE_PAT = process.env.AIRTABLE_PAT || process.env.AIRTABLE_API_KEY;
-  const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
+  const AIRTABLE_PAT = process.env.AIRTABLE_PAT || process.env.AIRTABLE_API_KEY || '';
+  const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID || 'applCjQYUgSTHSXcg';
 
   if (!AIRTABLE_PAT || !AIRTABLE_BASE_ID) {
     return res.json({

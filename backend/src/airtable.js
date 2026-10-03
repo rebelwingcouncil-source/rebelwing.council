@@ -2,7 +2,7 @@
 // Seamlessly syncs website consultation leads and ATS career applicants to Airtable
 
 const AIRTABLE_PAT = process.env.AIRTABLE_PAT || process.env.AIRTABLE_API_KEY || '';
-const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID || '';
+const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID || 'applCjQYUgSTHSXcg';
 const LEADS_TABLE = process.env.AIRTABLE_LEADS_TABLE || 'Leads';
 const CAREERS_TABLE = process.env.AIRTABLE_CAREERS_TABLE || 'Applicants';
 
