@@ -27,7 +27,7 @@ You must respond ONLY with a valid JSON object strictly matching this schema, wi
   "ai_guidance": "2 to 3 sentences of sharp statutory analysis and next steps recommended by Rebel Wing Council"
 }`;
 
-  const models = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'];
+  const models = ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-2.5-flash-lite'];
 
   for (const model of models) {
     try {
