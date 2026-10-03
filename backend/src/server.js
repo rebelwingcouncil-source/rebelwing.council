@@ -506,7 +506,7 @@ app.post('/api/careers', async (req, res) => {
 // ==========================================
 // 9. AI LEGAL ASSISTANT & CONTRACT REVIEW
 // ==========================================
-app.post('/api/ai/legal-triage', (req, res) => {
+app.post(['/api/ai/legal-triage', '/api/ai/triage'], (req, res) => {
   const { query: userQuery } = req.body;
   const qLower = (userQuery || '').toLowerCase();
 

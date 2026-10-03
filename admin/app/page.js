@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app') ? 'https://backend-three-theta-89.vercel.app' : 'http://localhost:5000');
 
 export default function AdminDashboard() {
   const [activeRole, setActiveRole] = useState('super_admin'); // super_admin, lawyer, paralegal, intern
