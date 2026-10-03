@@ -119,7 +119,15 @@ app.get('/api/leads', async (req, res) => {
 // 4. CONSULTATIONS
 // ==========================================
 app.post('/api/consultations', async (req, res) => {
-  const { name, email, phone, date, time_slot, mode, practice_area, notes } = req.body;
+  const name = req.body.name || req.body.client_name;
+  const email = req.body.email || req.body.client_email;
+  const phone = req.body.phone || req.body.client_phone;
+  const date = req.body.date || req.body.preferred_date;
+  const time_slot = req.body.time_slot || req.body.preferred_time || req.body.time;
+  const mode = req.body.mode || 'Online';
+  const practice_area = req.body.practice_area || 'General Legal Advice';
+  const notes = req.body.notes || '';
+
   if (!name || !email || !phone || !date || !time_slot) {
     return res.status(400).json({ success: false, error: 'Name, email, phone, date, and time slot are required.' });
   }
@@ -128,13 +136,13 @@ app.post('/api/consultations', async (req, res) => {
       `INSERT INTO consultations (client_name, email, phone, consultation_date, time_slot, mode, practice_area, notes, status, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Scheduled', NOW())
        RETURNING *`,
-      [name, email, phone, date, time_slot, mode || 'Online', practice_area || 'General Legal Advice', notes || '']
+      [name, email, phone, date, time_slot, mode, practice_area, notes]
     );
 
     await query(
       `INSERT INTO leads (name, email, phone, service, message, source, status, created_at)
        VALUES ($1, $2, $3, $4, $5, 'Online Consultation Booking', 'Consultation Scheduled', NOW())`,
-      [name, email, phone, practice_area || 'Consultation', `Booked for ${date} at ${time_slot} (${mode})`]
+      [name, email, phone, practice_area, `Booked for ${date} at ${time_slot} (${mode})`]
     );
 
     res.status(201).json({ success: true, consultation: result.rows[0] });
@@ -167,6 +175,7 @@ app.get('/api/matters', async (req, res) => {
 
 app.get('/api/matters/:id', async (req, res) => {
   const { id } = req.params;
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
   try {
     const matterRes = await query(`
       SELECT m.*, 
@@ -177,7 +186,7 @@ app.get('/api/matters/:id', async (req, res) => {
       LEFT JOIN profiles c ON m.client_id = c.id
       LEFT JOIN profiles l ON m.assigned_lawyer_id = l.id
       LEFT JOIN practice_areas pa ON m.practice_area_id = pa.id
-      WHERE m.id = $1 OR m.matter_id = $1
+      WHERE ${isUuid ? 'm.id = $1' : 'm.matter_id = $1'}
     `, [id]);
 
     if (matterRes.rows.length === 0) {
