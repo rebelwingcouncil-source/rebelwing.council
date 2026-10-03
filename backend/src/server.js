@@ -6,6 +6,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { pool, supabase, query } from './db.js';
 import { syncLeadToAirtable, syncApplicantToAirtable } from './airtable.js';
+import { getGeminiLegalTriage } from './gemini.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -517,8 +518,28 @@ app.post('/api/careers', async (req, res) => {
 // ==========================================
 // 9. AI LEGAL ASSISTANT & CONTRACT REVIEW
 // ==========================================
-app.post(['/api/ai/legal-triage', '/api/ai/triage'], (req, res) => {
+app.post(['/api/ai/legal-triage', '/api/ai/triage'], async (req, res) => {
   const { query: userQuery } = req.body;
+  if (!userQuery) {
+    return res.status(400).json({ success: false, error: 'Query is required.' });
+  }
+
+  // 1. Intelligent Legal Analysis via Google Gemini AI
+  try {
+    const geminiAssessment = await getGeminiLegalTriage(userQuery);
+    if (geminiAssessment && geminiAssessment.category) {
+      return res.json({
+        success: true,
+        source: 'Google Gemini AI',
+        triage: geminiAssessment,
+        ai_analysis: geminiAssessment
+      });
+    }
+  } catch (geminiErr) {
+    console.warn('[Gemini Triage Error]:', geminiErr.message);
+  }
+
+  // 2. Curated Statutory Legal Heuristics (Ensures 100% High-Availability)
   const qLower = (userQuery || '').toLowerCase();
 
   let recommendation = {
@@ -555,7 +576,17 @@ app.post(['/api/ai/legal-triage', '/api/ai/triage'], (req, res) => {
     };
   }
 
-  res.json({ success: true, triage: recommendation, ai_analysis: recommendation });
+  res.json({ success: true, source: 'Statutory Rule Heuristics', triage: recommendation, ai_analysis: recommendation });
+});
+
+app.get('/api/ai/status', (req, res) => {
+  const isConfigured = !!(process.env.GEMINI_API_KEY);
+  res.json({
+    service: 'Google Gemini Legal AI',
+    configured: isConfigured,
+    model: 'gemini-1.5-flash / gemini-2.0-flash',
+    status: isConfigured ? 'Active & Powered by Gemini' : 'Pending GEMINI_API_KEY (Falling back to Curated Legal Rules)'
+  });
 });
 
 // ==========================================
