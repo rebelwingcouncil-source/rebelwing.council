@@ -76,6 +76,10 @@ tests = [
         "experience": "5 Years PQE Commercial Litigation",
         "resume_notes": "Submitted via automated test suite"
     }),
+    ("Admin RBAC Login API", "http://localhost:5000/api/auth/login", "POST", {
+        "email": "admin@rebelwingcouncil.com",
+        "password": "Admin@RebelWing2026"
+    }),
 
     # 2. Frontend Applications
     ("User App: Landing Page (Port 3000)", "http://localhost:3000", "GET", None),

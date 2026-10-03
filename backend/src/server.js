@@ -68,6 +68,55 @@ app.get('/api/stats', async (req, res) => {
 });
 
 // ==========================================
+// 1.5 AUTHENTICATION & RBAC LOGIN
+// ==========================================
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ success: false, error: 'Email and password are required.' });
+  }
+
+  // Pre-configured role credentials
+  const credentials = {
+    'admin@rebelwingcouncil.com': { password: 'Admin@RebelWing2026', role: 'super_admin' },
+    'priya.d@rebelwingcouncil.com': { password: 'Lawyer@RebelWing2026', role: 'lawyer' },
+    'vikram.r@rebelwingcouncil.com': { password: 'Lawyer@RebelWing2026', role: 'lawyer' },
+    'neha.v@rebelwingcouncil.com': { password: 'Paralegal@RebelWing2026', role: 'paralegal' },
+    'arjun.m@rebelwingcouncil.com': { password: 'Intern@RebelWing2026', role: 'intern' },
+    'aditi.client@acmeholdings.com': { password: 'Client@RebelWing2026', role: 'client' }
+  };
+
+  const userCred = credentials[email.toLowerCase().trim()];
+  if (!userCred || userCred.password !== password) {
+    return res.status(401).json({ success: false, error: 'Invalid email or password.' });
+  }
+
+  try {
+    const profileRes = await query('SELECT * FROM profiles WHERE email = $1', [email.toLowerCase().trim()]);
+    const profile = profileRes.rows[0] || {
+      email,
+      role: userCred.role,
+      full_name: email === 'admin@rebelwingcouncil.com' ? 'Adv. Rajeshwar Sharma' : 'Legal Counsel'
+    };
+
+    res.json({
+      success: true,
+      user: {
+        id: profile.id,
+        email: profile.email,
+        full_name: profile.full_name,
+        role: profile.role,
+        designation: profile.designation,
+        bar_council_id: profile.bar_council_id
+      },
+      token: `rwc_session_${Date.now()}`
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
 // 2. PRACTICE AREAS
 // ==========================================
 app.get('/api/practice-areas', async (req, res) => {

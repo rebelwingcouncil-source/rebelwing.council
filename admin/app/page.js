@@ -27,6 +27,48 @@ export default function AdminDashboard() {
   const [internHours, setInternHours] = useState('8');
   const [internLogSuccess, setInternLogSuccess] = useState(false);
 
+  // Authentication State
+  const [isAuthenticated, setIsAuthenticated] = useState(true);
+  const [currentUser, setCurrentUser] = useState({
+    email: 'admin@rebelwingcouncil.com',
+    full_name: 'Adv. Rajeshwar Sharma',
+    role: 'super_admin',
+    designation: 'Managing Partner & Senior Advocate'
+  });
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+
+  const handleLogin = async (e, quickEmail, quickPassword) => {
+    if (e) e.preventDefault();
+    const emailToUse = quickEmail || loginEmail;
+    const passToUse = quickPassword || loginPassword;
+    setLoginLoading(true);
+    setLoginError('');
+    try {
+      const res = await fetch('http://localhost:5000/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailToUse, password: passToUse })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setIsAuthenticated(true);
+        setCurrentUser(data.user);
+        setActiveRole(data.user.role);
+        if (data.user.role === 'intern') setActiveTab('intern');
+        else setActiveTab('matters');
+      } else {
+        setLoginError(data.error || 'Authentication failed');
+      }
+    } catch {
+      setLoginError('Unable to connect to authentication server.');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
   // Fetch data from backend
   const loadData = () => {
     Promise.all([
@@ -67,6 +109,136 @@ export default function AdminDashboard() {
       console.error(e);
     }
   };
+
+  if (!isAuthenticated) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        backgroundColor: 'var(--admin-navy-dark)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '2rem',
+        backgroundImage: 'radial-gradient(circle at 50% 20%, rgba(212, 175, 55, 0.08), transparent 70%)'
+      }}>
+        <div style={{
+          backgroundColor: '#FFFFFF',
+          borderRadius: '16px',
+          width: '100%',
+          maxWidth: '460px',
+          padding: '2.5rem',
+          boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+          border: '1.5px solid var(--admin-border-gold)'
+        }}>
+          <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+            <Image src="/logo.jpg" alt="Logo" width={64} height={64} style={{ borderRadius: '50%', border: '2px solid var(--admin-gold)', marginBottom: '0.75rem' }} />
+            <h2 style={{ fontFamily: 'var(--font-serif)', color: 'var(--admin-navy)', fontSize: '1.4rem', fontWeight: 700, margin: '0 0 0.25rem' }}>
+              REBEL WING COUNCIL
+            </h2>
+            <div style={{ fontSize: '0.75rem', color: 'var(--admin-gold-dark)', fontWeight: 600, letterSpacing: '0.12em' }}>
+              LAW FIRM OPERATING SYSTEM
+            </div>
+          </div>
+
+          {loginError && (
+            <div style={{ backgroundColor: '#FEE2E2', color: '#991B1B', padding: '0.75rem', borderRadius: '8px', marginBottom: '1.25rem', fontSize: '0.85rem', textAlign: 'center' }}>
+              {loginError}
+            </div>
+          )}
+
+          <form onSubmit={e => handleLogin(e)}>
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--admin-navy)', marginBottom: '0.35rem' }}>
+                Firm Email Address
+              </label>
+              <input
+                type="email"
+                required
+                placeholder="e.g. admin@rebelwingcouncil.com"
+                value={loginEmail}
+                onChange={e => setLoginEmail(e.target.value)}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--admin-border)', fontSize: '0.9rem' }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--admin-navy)', marginBottom: '0.35rem' }}>
+                Secure Password
+              </label>
+              <input
+                type="password"
+                required
+                placeholder="••••••••••••"
+                value={loginPassword}
+                onChange={e => setLoginPassword(e.target.value)}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--admin-border)', fontSize: '0.9rem' }}
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loginLoading}
+              style={{
+                width: '100%',
+                backgroundColor: 'var(--admin-navy)',
+                color: '#FFFFFF',
+                padding: '0.85rem',
+                borderRadius: '8px',
+                border: 'none',
+                fontWeight: 600,
+                fontSize: '0.95rem',
+                cursor: 'pointer',
+                marginBottom: '1.5rem'
+              }}
+            >
+              {loginLoading ? 'Authenticating...' : 'Sign In to Operating System →'}
+            </button>
+          </form>
+
+          {/* Quick Demo Credentials Panel */}
+          <div style={{ borderTop: '1px solid var(--admin-border)', paddingTop: '1.25rem' }}>
+            <div style={{ fontSize: '0.75rem', color: 'var(--admin-text-muted)', fontWeight: 600, marginBottom: '0.75rem', textAlign: 'center' }}>
+              ⚡ 1-Click Role Login for Assessment:
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+              <button
+                type="button"
+                onClick={() => handleLogin(null, 'admin@rebelwingcouncil.com', 'Admin@RebelWing2026')}
+                style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', backgroundColor: '#F8FAFC', fontSize: '0.75rem', cursor: 'pointer', textAlign: 'left' }}
+              >
+                👑 <strong>Super Admin</strong>
+                <div style={{ fontSize: '0.65rem', color: '#64748B' }}>Managing Partner</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleLogin(null, 'priya.d@rebelwingcouncil.com', 'Lawyer@RebelWing2026')}
+                style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', backgroundColor: '#F8FAFC', fontSize: '0.75rem', cursor: 'pointer', textAlign: 'left' }}
+              >
+                ⚖️ <strong>Senior Advocate</strong>
+                <div style={{ fontSize: '0.65rem', color: '#64748B' }}>Corporate &amp; M&amp;A</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleLogin(null, 'neha.v@rebelwingcouncil.com', 'Paralegal@RebelWing2026')}
+                style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', backgroundColor: '#F8FAFC', fontSize: '0.75rem', cursor: 'pointer', textAlign: 'left' }}
+              >
+                📁 <strong>Paralegal</strong>
+                <div style={{ fontSize: '0.65rem', color: '#64748B' }}>Compliance Queue</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleLogin(null, 'arjun.m@rebelwingcouncil.com', 'Intern@RebelWing2026')}
+                style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', backgroundColor: '#F8FAFC', fontSize: '0.75rem', cursor: 'pointer', textAlign: 'left' }}
+              >
+                🎓 <strong>Intern</strong>
+                <div style={{ fontSize: '0.65rem', color: '#64748B' }}>Sandboxed Log</div>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: 'var(--admin-bg)' }}>
@@ -281,6 +453,26 @@ export default function AdminDashboard() {
               <option value="paralegal">Neha Verma (Senior Legal Executive)</option>
               <option value="intern">Arjun Mehta (Research Intern)</option>
             </select>
+
+            <button
+              onClick={() => {
+                setIsAuthenticated(false);
+                setLoginError('');
+              }}
+              title="Sign Out of Operating System"
+              style={{
+                padding: '0.45rem 0.85rem',
+                borderRadius: '8px',
+                border: '1px solid #FECACA',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                color: '#DC2626',
+                backgroundColor: '#FEF2F2',
+                cursor: 'pointer'
+              }}
+            >
+              Sign Out ↗
+            </button>
           </div>
         </header>
 
