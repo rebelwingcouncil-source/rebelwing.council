@@ -24,6 +24,11 @@ export const pool = new Pool({
   idleTimeoutMillis: 30000,
 });
 
+// Handle idle connection errors gracefully so the process does not terminate
+pool.on('error', (err) => {
+  console.error('[PostgreSQL Pool Warning]: Idle client connection error:', err?.message || err);
+});
+
 // Supabase Client with Service/Secret Key for privileged backend tasks
 const supabaseUrl = process.env.SUPABASE_URL || 'https://tauzepmapcywrzoqgeyp.supabase.co';
 const supabaseKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_ANON_KEY || 'placeholder_secret';
