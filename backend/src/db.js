@@ -12,10 +12,10 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const { Pool } = pg;
 
-// Supabase Direct PostgreSQL Pool
+// Supabase Direct PostgreSQL Pool (using PgBouncer transaction pooler port 6543)
 export const pool = new Pool({
   host: process.env.DB_HOST || 'aws-0-ap-northeast-1.pooler.supabase.com',
-  port: parseInt(process.env.DB_PORT || '5432'),
+  port: parseInt(process.env.DB_PORT_POOLER || process.env.DB_PORT || '6543'),
   database: process.env.DB_NAME || 'postgres',
   user: process.env.DB_USER || 'postgres.tauzepmapcywrzoqgeyp',
   password: process.env.DB_PASSWORD,

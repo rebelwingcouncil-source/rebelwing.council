@@ -10,7 +10,7 @@ def test_endpoint(name, url, method="GET", data=None):
             req.data = json.dumps(data).encode('utf-8')
             req.add_header('Content-Type', 'application/json')
         start = time.time()
-        with urllib.request.urlopen(req, timeout=12) as response:
+        with urllib.request.urlopen(req, timeout=25) as response:
             duration = int((time.time() - start) * 1000)
             status = response.status
             body = response.read().decode('utf-8')

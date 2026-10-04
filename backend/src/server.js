@@ -58,24 +58,26 @@ app.get('/api/health', async (req, res) => {
 // Admin Dashboard Summary Metrics
 app.get('/api/stats', async (req, res) => {
   try {
-    const [clientsRes, mattersRes, tasksRes, deadlinesRes, leadsRes, researchRes] = await Promise.all([
-      query("SELECT COUNT(*) FROM profiles WHERE role = 'client'"),
-      query("SELECT COUNT(*) FROM matters WHERE status = 'Active'"),
-      query("SELECT COUNT(*) FROM tasks WHERE status != 'Completed'"),
-      query("SELECT COUNT(*) FROM deadlines WHERE due_date <= CURRENT_DATE + INTERVAL '7 days' AND is_completed = FALSE"),
-      query("SELECT COUNT(*) FROM leads WHERE status = 'New'"),
-      query("SELECT COUNT(*) FROM legal_research_tasks WHERE status != 'Approved'")
-    ]);
+    const result = await query(`
+      SELECT 
+        (SELECT COUNT(*) FROM profiles WHERE role = 'client') as total_clients,
+        (SELECT COUNT(*) FROM matters WHERE status = 'Active') as active_matters,
+        (SELECT COUNT(*) FROM tasks WHERE status != 'Completed') as pending_tasks,
+        (SELECT COUNT(*) FROM deadlines WHERE due_date <= CURRENT_DATE + INTERVAL '7 days' AND is_completed = FALSE) as urgent_deadlines,
+        (SELECT COUNT(*) FROM leads WHERE status = 'New') as new_leads,
+        (SELECT COUNT(*) FROM legal_research_tasks WHERE status != 'Approved') as active_research
+    `);
 
+    const row = result.rows[0] || {};
     res.json({
       success: true,
       stats: {
-        total_clients: parseInt(clientsRes.rows[0].count),
-        active_matters: parseInt(mattersRes.rows[0].count),
-        pending_tasks: parseInt(tasksRes.rows[0].count),
-        urgent_deadlines: parseInt(deadlinesRes.rows[0].count),
-        new_leads: parseInt(leadsRes.rows[0].count),
-        active_research: parseInt(researchRes.rows[0].count),
+        total_clients: parseInt(row.total_clients || 0),
+        active_matters: parseInt(row.active_matters || 0),
+        pending_tasks: parseInt(row.pending_tasks || 0),
+        urgent_deadlines: parseInt(row.urgent_deadlines || 0),
+        new_leads: parseInt(row.new_leads || 0),
+        active_research: parseInt(row.active_research || 0),
       }
     });
   } catch (err) {
@@ -626,21 +628,21 @@ app.post(['/api/careers', '/api/applications'], async (req, res) => {
 // Summary Endpoint for All Submissions & Inquiries
 app.get('/api/submissions/summary', async (req, res) => {
   try {
-    const [leadsRes, appsRes, consultsRes] = await Promise.all([
-      query('SELECT COUNT(*) FROM leads'),
-      query('SELECT type, COUNT(*) FROM applications GROUP BY type'),
-      query('SELECT COUNT(*) FROM consultations')
-    ]);
+    const result = await query(`
+      SELECT
+        (SELECT COUNT(*) FROM leads) as total_leads,
+        (SELECT COUNT(*) FROM consultations) as total_consultations,
+        (SELECT COUNT(*) FROM applications WHERE type = 'job') as job_applications,
+        (SELECT COUNT(*) FROM applications WHERE type = 'internship') as internship_applications
+    `);
 
-    const jobsCount = appsRes.rows.find(r => r.type === 'job')?.count || 0;
-    const internCount = appsRes.rows.find(r => r.type === 'internship')?.count || 0;
-
+    const row = result.rows[0] || {};
     res.json({
       success: true,
-      total_leads: parseInt(leadsRes.rows[0].count),
-      total_consultations: parseInt(consultsRes.rows[0].count),
-      job_applications: parseInt(jobsCount),
-      internship_applications: parseInt(internCount)
+      total_leads: parseInt(row.total_leads || 0),
+      total_consultations: parseInt(row.total_consultations || 0),
+      job_applications: parseInt(row.job_applications || 0),
+      internship_applications: parseInt(row.internship_applications || 0)
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
