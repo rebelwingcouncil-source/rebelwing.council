@@ -12,17 +12,31 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const { Pool } = pg;
 
-// Supabase Direct PostgreSQL Pool (using PgBouncer transaction pooler port 6543)
-export const pool = new Pool({
-  host: process.env.DB_HOST || 'aws-0-ap-northeast-1.pooler.supabase.com',
-  port: parseInt(process.env.DB_PORT_POOLER || process.env.DB_PORT || '6543'),
-  database: process.env.DB_NAME || 'postgres',
-  user: process.env.DB_USER || 'postgres.tauzepmapcywrzoqgeyp',
-  password: process.env.DB_PASSWORD,
-  ssl: { rejectUnauthorized: false },
-  max: 10,
-  idleTimeoutMillis: 30000,
-});
+// Supabase PostgreSQL Pool - universally enforces PgBouncer Transaction Pooler (port 6543)
+const rawConn = process.env.DATABASE_URL;
+const connectionString = rawConn 
+  ? (rawConn.includes(':5432') ? rawConn.replace(':5432', ':6543') : rawConn)
+  : undefined;
+
+export const pool = new Pool(
+  connectionString
+    ? {
+        connectionString,
+        ssl: { rejectUnauthorized: false },
+        max: 8,
+        idleTimeoutMillis: 15000,
+      }
+    : {
+        host: process.env.DB_HOST || 'aws-0-ap-northeast-1.pooler.supabase.com',
+        port: parseInt(process.env.DB_PORT_POOLER || '6543'),
+        database: process.env.DB_NAME || 'postgres',
+        user: process.env.DB_USER || 'postgres.tauzepmapcywrzoqgeyp',
+        password: process.env.DB_PASSWORD || 'Rebelwing@123',
+        ssl: { rejectUnauthorized: false },
+        max: 8,
+        idleTimeoutMillis: 15000,
+      }
+);
 
 // Handle idle connection errors gracefully so the process does not terminate
 pool.on('error', (err) => {
