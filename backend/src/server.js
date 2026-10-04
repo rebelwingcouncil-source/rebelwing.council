@@ -180,9 +180,60 @@ app.get('/api/leads', async (req, res) => {
   }
 });
 
+app.patch('/api/leads/:id', async (req, res) => {
+  const { id } = req.params;
+  const { status, priority, notes } = req.body;
+  try {
+    const result = await query(`
+      UPDATE leads
+      SET status = COALESCE($1, status),
+          priority = COALESCE($2, priority),
+          notes = COALESCE($3, notes),
+          updated_at = NOW()
+      WHERE id = $4
+      RETURNING *
+    `, [status, priority, notes, id]);
+    res.json({ success: true, lead: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ==========================================
 // 4. CONSULTATIONS
 // ==========================================
+app.get('/api/consultations', async (req, res) => {
+  try {
+    const result = await query(`
+      SELECT c.*, p.full_name as assigned_lawyer_name
+      FROM consultations c
+      LEFT JOIN profiles p ON c.assigned_lawyer_id = p.id
+      ORDER BY c.created_at DESC
+    `);
+    res.json({ success: true, consultations: result.rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.patch('/api/consultations/:id', async (req, res) => {
+  const { id } = req.params;
+  const { status, notes, meeting_link } = req.body;
+  try {
+    const result = await query(`
+      UPDATE consultations
+      SET status = COALESCE($1, status),
+          notes = COALESCE($2, notes),
+          meeting_link = COALESCE($3, meeting_link)
+      WHERE id = $4
+      RETURNING *
+    `, [status, notes, meeting_link, id]);
+    res.json({ success: true, consultation: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.post('/api/consultations', async (req, res) => {
   const name = req.body.name || req.body.client_name;
   const email = req.body.email || req.body.client_email;
@@ -207,7 +258,7 @@ app.post('/api/consultations', async (req, res) => {
     await query(
       `INSERT INTO leads (name, email, phone, service, message, source, status, created_at)
        VALUES ($1, $2, $3, $4, $5, 'Online Consultation Booking', 'Consultation Scheduled', NOW())`,
-      [name, email, phone, practice_area, `Booked for ${date} at ${time_slot} (${mode})`]
+      [name, email, phone, practice_area, `Booked for ${date} at ${time_slot} (${mode}). Notes: ${notes || 'None'}`]
     );
 
     // Non-blocking sync to Airtable CRM Base
@@ -220,6 +271,7 @@ app.post('/api/consultations', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
 
 // ==========================================
 // 5. MATTERS & CASE REGISTRY
@@ -492,24 +544,104 @@ app.post('/api/intern/daily-updates', async (req, res) => {
   }
 });
 
-app.post('/api/careers', async (req, res) => {
-  const { name, email, phone, role, experience, resume_notes } = req.body;
+// ==========================================
+// 8. CAREERS & ATS APPLICATIONS
+// ==========================================
+app.get('/api/applications', async (req, res) => {
+  const { type } = req.query; // 'job' or 'internship'
+  try {
+    let queryText = 'SELECT * FROM applications';
+    let params = [];
+    if (type) {
+      queryText += ' WHERE type = $1';
+      params.push(type);
+    }
+    queryText += ' ORDER BY created_at DESC';
+    const result = await query(queryText, params);
+    res.json({ success: true, applications: result.rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.patch('/api/applications/:id', async (req, res) => {
+  const { id } = req.params;
+  const { status, resume_notes } = req.body;
+  try {
+    const result = await query(`
+      UPDATE applications
+      SET status = COALESCE($1, status),
+          resume_notes = COALESCE($2, resume_notes),
+          updated_at = NOW()
+      WHERE id = $3
+      RETURNING *
+    `, [status, resume_notes, id]);
+    res.json({ success: true, application: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post(['/api/careers', '/api/applications'], async (req, res) => {
+  const { name, email, phone, role, type, qualification, experience, resume_notes, resume_filename } = req.body;
   if (!name || !email) {
     return res.status(400).json({ success: false, error: 'Name and email are required.' });
   }
+  const appType = type || (role && (role.toLowerCase().includes('intern') || role.toLowerCase().includes('student')) ? 'internship' : 'job');
+  const roleTitle = role || (appType === 'internship' ? 'Legal Internship Candidate' : 'Legal Executive');
+
   try {
     const result = await query(
-      `INSERT INTO leads (name, email, phone, service, message, source, status, created_at)
-       VALUES ($1, $2, $3, $4, $5, 'Career ATS Application', 'New', NOW())
+      `INSERT INTO applications (type, role, name, email, phone, qualification, experience, resume_notes, resume_filename, status, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'New', NOW(), NOW())
        RETURNING *`,
-      [name, email, phone || '', `Career Application: ${role || 'Legal Counsel'}`, `Exp: ${experience || 'N/A'}. Details: ${resume_notes || 'Submitted via website ATS'}`]
+      [appType, roleTitle, name, email, phone || '', qualification || '', experience || '', resume_notes || '', resume_filename || '']
     );
+
+    // Also mirror to leads table so it appears in unified CRM
+    await query(
+      `INSERT INTO leads (name, email, phone, service, message, source, status, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, 'New', NOW())`,
+      [
+        name,
+        email,
+        phone || '',
+        `${appType === 'internship' ? 'Internship Application' : 'Job Application'}: ${roleTitle}`,
+        `Type: ${appType}. Qualification / Roll No: ${qualification || 'N/A'}. Exp: ${experience || 'N/A'}. Details: ${resume_notes || 'Submitted via website ATS'}`,
+        appType === 'internship' ? 'Website Internship ATS' : 'Website Career ATS'
+      ]
+    );
+
     // Non-blocking sync to Airtable ATS Base
-    syncApplicantToAirtable({ name, email, phone, role, experience, resume_notes }).catch(err => {
+    syncApplicantToAirtable({ name, email, phone, role: roleTitle, experience: qualification || experience, resume_notes }).catch(err => {
       console.error('[Airtable Sync Err]:', err.message);
     });
 
-    res.status(201).json({ success: true, applicant: result.rows[0] });
+    res.status(201).json({ success: true, application: result.rows[0], applicant: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Summary Endpoint for All Submissions & Inquiries
+app.get('/api/submissions/summary', async (req, res) => {
+  try {
+    const [leadsRes, appsRes, consultsRes] = await Promise.all([
+      query('SELECT COUNT(*) FROM leads'),
+      query('SELECT type, COUNT(*) FROM applications GROUP BY type'),
+      query('SELECT COUNT(*) FROM consultations')
+    ]);
+
+    const jobsCount = appsRes.rows.find(r => r.type === 'job')?.count || 0;
+    const internCount = appsRes.rows.find(r => r.type === 'internship')?.count || 0;
+
+    res.json({
+      success: true,
+      total_leads: parseInt(leadsRes.rows[0].count),
+      total_consultations: parseInt(consultsRes.rows[0].count),
+      job_applications: parseInt(jobsCount),
+      internship_applications: parseInt(internCount)
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

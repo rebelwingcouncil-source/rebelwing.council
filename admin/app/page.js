@@ -7,15 +7,24 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'unde
 
 export default function AdminDashboard() {
   const [activeRole, setActiveRole] = useState('super_admin'); // super_admin, lawyer, paralegal, intern
-  const [activeTab, setActiveTab] = useState('matters'); // matters, deadlines, documents, leads, research, intern
+  const [activeTab, setActiveTab] = useState('consultations'); // consultations, jobs, internships, leads, matters, deadlines, documents, research, intern
+  
+  // Data States
+  const [consultations, setConsultations] = useState([]);
+  const [jobApplications, setJobApplications] = useState([]);
+  const [internApplications, setInternApplications] = useState([]);
+  const [leads, setLeads] = useState([]);
   const [matters, setMatters] = useState([]);
   const [deadlines, setDeadlines] = useState([]);
   const [docRequests, setDocRequests] = useState([]);
-  const [leads, setLeads] = useState([]);
   const [researchTasks, setResearchTasks] = useState([]);
   const [knowledgeBase, setKnowledgeBase] = useState([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Modal States
+  const [selectedItem, setSelectedItem] = useState(null); // for viewing full submission details
+  const [selectedType, setSelectedType] = useState(''); // 'consultation', 'job', 'internship', 'lead'
+
   const [isNewMatterOpen, setIsNewMatterOpen] = useState(false);
   const [newMatterTitle, setNewMatterTitle] = useState('');
   const [newMatterCategory, setNewMatterCategory] = useState('Corporate Restructuring');
@@ -60,7 +69,7 @@ export default function AdminDashboard() {
         setCurrentUser(data.user);
         setActiveRole(data.user.role);
         if (data.user.role === 'intern') setActiveTab('intern');
-        else setActiveTab('matters');
+        else setActiveTab('consultations');
       } else {
         setLoginError(data.error || 'Authentication failed');
       }
@@ -71,33 +80,109 @@ export default function AdminDashboard() {
     }
   };
 
-  // Fetch data from backend
-  const loadData = () => {
-    Promise.all([
-      fetch(`${API_BASE_URL}/api/matters`).then(r => r.json()).catch(() => ({ matters: [] })),
-      fetch(`${API_BASE_URL}/api/deadlines`).then(r => r.json()).catch(() => ({ deadlines: { overdue: [], today: [], upcoming: [] } })),
-      fetch(`${API_BASE_URL}/api/document-requests`).then(r => r.json()).catch(() => ({ requests: [] })),
-      fetch(`${API_BASE_URL}/api/leads`).then(r => r.json()).catch(() => ({ leads: [] })),
-      fetch(`${API_BASE_URL}/api/research-tasks`).then(r => r.json()).catch(() => ({ tasks: [] })),
-      fetch(`${API_BASE_URL}/api/knowledge-base`).then(r => r.json()).catch(() => ({ precedents: [] })),
-    ]).then(([mattersData, deadlinesData, docsData, leadsData, researchData, kbData]) => {
-      setMatters(mattersData.matters || []);
+  // Fetch all live data from backend
+  const loadData = async () => {
+    setIsRefreshing(true);
+    try {
+      const [
+        consultsRes,
+        jobsRes,
+        internsRes,
+        leadsRes,
+        mattersRes,
+        deadlinesRes,
+        docsRes,
+        researchRes,
+        kbRes
+      ] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/consultations`).then(r => r.json()).catch(() => ({ consultations: [] })),
+        fetch(`${API_BASE_URL}/api/applications?type=job`).then(r => r.json()).catch(() => ({ applications: [] })),
+        fetch(`${API_BASE_URL}/api/applications?type=internship`).then(r => r.json()).catch(() => ({ applications: [] })),
+        fetch(`${API_BASE_URL}/api/leads`).then(r => r.json()).catch(() => ({ leads: [] })),
+        fetch(`${API_BASE_URL}/api/matters`).then(r => r.json()).catch(() => ({ matters: [] })),
+        fetch(`${API_BASE_URL}/api/deadlines`).then(r => r.json()).catch(() => ({ deadlines: { overdue: [], today: [], upcoming: [] } })),
+        fetch(`${API_BASE_URL}/api/document-requests`).then(r => r.json()).catch(() => ({ requests: [] })),
+        fetch(`${API_BASE_URL}/api/research-tasks`).then(r => r.json()).catch(() => ({ tasks: [] })),
+        fetch(`${API_BASE_URL}/api/knowledge-base`).then(r => r.json()).catch(() => ({ precedents: [] })),
+      ]);
+
+      setConsultations(consultsRes.consultations || []);
+      setJobApplications(jobsRes.applications || []);
+      setInternApplications(internsRes.applications || []);
+      setLeads(leadsRes.leads || []);
+      setMatters(mattersRes.matters || []);
+      
       const allDeadlines = [
-        ...(deadlinesData.deadlines?.overdue || []),
-        ...(deadlinesData.deadlines?.today || []),
-        ...(deadlinesData.deadlines?.upcoming || [])
+        ...(deadlinesRes.deadlines?.overdue || []),
+        ...(deadlinesRes.deadlines?.today || []),
+        ...(deadlinesRes.deadlines?.upcoming || [])
       ];
       setDeadlines(allDeadlines);
-      setDocRequests(docsData.requests || []);
-      setLeads(leadsData.leads || []);
-      setResearchTasks(researchData.tasks || []);
-      setKnowledgeBase(kbData.precedents || []);
-    });
+      setDocRequests(docsRes.requests || []);
+      setResearchTasks(researchRes.tasks || []);
+      setKnowledgeBase(kbRes.precedents || []);
+    } catch (err) {
+      console.error('Error loading data:', err);
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   useEffect(() => {
     loadData();
+    // Auto refresh every 30 seconds
+    const interval = setInterval(loadData, 30000);
+    return () => clearInterval(interval);
   }, []);
+
+  // Update Status Handlers
+  const handleUpdateConsultationStatus = async (id, status) => {
+    try {
+      await fetch(`${API_BASE_URL}/api/consultations/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      loadData();
+      if (selectedItem && selectedItem.id === id) {
+        setSelectedItem(prev => ({ ...prev, status }));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleUpdateApplicationStatus = async (id, status) => {
+    try {
+      await fetch(`${API_BASE_URL}/api/applications/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      loadData();
+      if (selectedItem && selectedItem.id === id) {
+        setSelectedItem(prev => ({ ...prev, status }));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleUpdateLeadStatus = async (id, status) => {
+    try {
+      await fetch(`${API_BASE_URL}/api/leads/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      loadData();
+      if (selectedItem && selectedItem.id === id) {
+        setSelectedItem(prev => ({ ...prev, status }));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const handleUpdateDocStatus = async (id, status) => {
     try {
@@ -184,59 +269,41 @@ export default function AdminDashboard() {
                 width: '100%',
                 backgroundColor: 'var(--admin-navy)',
                 color: '#FFFFFF',
+                border: '1px solid var(--admin-gold)',
                 padding: '0.85rem',
                 borderRadius: '8px',
-                border: 'none',
-                fontWeight: 600,
+                fontWeight: 700,
                 fontSize: '0.95rem',
-                cursor: 'pointer',
-                marginBottom: '1.5rem'
+                cursor: 'pointer'
               }}
             >
-              {loginLoading ? 'Authenticating...' : 'Sign In to Operating System →'}
+              {loginLoading ? 'Authenticating...' : 'Sign In to Council OS →'}
             </button>
           </form>
 
-          {/* Quick Demo Credentials Panel */}
-          <div style={{ borderTop: '1px solid var(--admin-border)', paddingTop: '1.25rem' }}>
-            <div style={{ fontSize: '0.75rem', color: 'var(--admin-text-muted)', fontWeight: 600, marginBottom: '0.75rem', textAlign: 'center' }}>
-              ⚡ 1-Click Role Login for Assessment:
+          {/* Quick Sign-In Buttons */}
+          <div style={{ marginTop: '1.75rem', borderTop: '1px solid var(--admin-border)', paddingTop: '1.25rem' }}>
+            <div style={{ fontSize: '0.75rem', color: 'var(--admin-text-muted)', textAlign: 'center', marginBottom: '0.75rem' }}>
+              Quick Demo Access:
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
               <button
                 type="button"
-                onClick={() => handleLogin(null, 'admin@rebelwingcouncil.com', 'Admin@RebelWing2026')}
-                style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', backgroundColor: '#F8FAFC', fontSize: '0.75rem', cursor: 'pointer', textAlign: 'left' }}
+                onClick={e => handleLogin(e, 'admin@rebelwingcouncil.com', 'Admin@RebelWing2026')}
+                style={{ padding: '0.5rem', fontSize: '0.75rem', background: '#F8FAFC', border: '1px solid var(--admin-border)', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
               >
-                👑 <strong>Super Admin</strong>
-                <div style={{ fontSize: '0.65rem', color: '#64748B' }}>Managing Partner</div>
+                Managing Partner
               </button>
               <button
                 type="button"
-                onClick={() => handleLogin(null, 'priya.d@rebelwingcouncil.com', 'Lawyer@RebelWing2026')}
-                style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', backgroundColor: '#F8FAFC', fontSize: '0.75rem', cursor: 'pointer', textAlign: 'left' }}
+                onClick={e => handleLogin(e, 'priya.d@rebelwingcouncil.com', 'Lawyer@RebelWing2026')}
+                style={{ padding: '0.5rem', fontSize: '0.75rem', background: '#F8FAFC', border: '1px solid var(--admin-border)', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
               >
-                ⚖️ <strong>Senior Advocate</strong>
-                <div style={{ fontSize: '0.65rem', color: '#64748B' }}>Corporate &amp; M&amp;A</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleLogin(null, 'neha.v@rebelwingcouncil.com', 'Paralegal@RebelWing2026')}
-                style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', backgroundColor: '#F8FAFC', fontSize: '0.75rem', cursor: 'pointer', textAlign: 'left' }}
-              >
-                📁 <strong>Paralegal</strong>
-                <div style={{ fontSize: '0.65rem', color: '#64748B' }}>Compliance Queue</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleLogin(null, 'arjun.m@rebelwingcouncil.com', 'Intern@RebelWing2026')}
-                style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', backgroundColor: '#F8FAFC', fontSize: '0.75rem', cursor: 'pointer', textAlign: 'left' }}
-              >
-                🎓 <strong>Intern</strong>
-                <div style={{ fontSize: '0.65rem', color: '#64748B' }}>Sandboxed Log</div>
+                Corporate Partner
               </button>
             </div>
           </div>
+
         </div>
       </div>
     );
@@ -245,9 +312,11 @@ export default function AdminDashboard() {
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: 'var(--admin-bg)' }}>
       
-      {/* 1. LEFT SIDEBAR */}
+      {/* ========================================================= */}
+      {/* 1. SIDEBAR NAVIGATION */}
+      {/* ========================================================= */}
       <aside style={{
-        width: '260px',
+        width: '275px',
         backgroundColor: 'var(--admin-navy-dark)',
         color: '#FFFFFF',
         display: 'flex',
@@ -256,206 +325,362 @@ export default function AdminDashboard() {
         flexShrink: 0
       }}>
         {/* Brand Header */}
-        <div style={{ padding: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <Image src="/logo.jpg" alt="Logo" width={38} height={38} style={{ borderRadius: '50%', border: '1.5px solid var(--admin-gold)' }} />
+        <div style={{ padding: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+          <Image src="/logo.jpg" alt="Logo" width={42} height={42} style={{ borderRadius: '50%', border: '1.5px solid var(--admin-gold)' }} />
           <div>
-            <div style={{ fontFamily: 'var(--font-serif)', fontSize: '1rem', fontWeight: 700, color: '#FFFFFF', lineHeight: 1.1 }}>
+            <div style={{ fontFamily: 'var(--font-serif)', fontSize: '1.05rem', fontWeight: 700, color: '#FFFFFF', lineHeight: 1.1 }}>
               REBEL WING
             </div>
-            <div style={{ fontSize: '0.6rem', color: 'var(--admin-gold-light)', letterSpacing: '0.1em' }}>
-              OPERATING SYSTEM
+            <div style={{ fontSize: '0.62rem', color: 'var(--admin-gold-light)', letterSpacing: '0.12em' }}>
+              ADMIN OPERATING SYSTEM
             </div>
           </div>
         </div>
 
-        {/* Navigation Items (Role-Adaptive) */}
-        <nav style={{ padding: '1.25rem 0.75rem', display: 'flex', flexDirection: 'column', gap: '0.35rem', flex: 1 }}>
+        {/* Section Label: User Submissions Hub */}
+        <div style={{ padding: '1rem 1.25rem 0.35rem', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.12em', color: 'var(--admin-gold-light)', textTransform: 'uppercase' }}>
+          User Website Ingestion
+        </div>
+
+        {/* Navigation Items (Submissions First) */}
+        <nav style={{ padding: '0 0.75rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.3rem', flex: 1, overflowY: 'auto' }}>
           
-          {activeRole !== 'intern' && (
-            <>
-              <button
-                onClick={() => setActiveTab('matters')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.75rem',
-                  padding: '0.75rem 1rem',
-                  borderRadius: '8px',
-                  border: 'none',
-                  backgroundColor: activeTab === 'matters' ? 'var(--admin-navy-surface)' : 'transparent',
-                  color: activeTab === 'matters' ? 'var(--admin-gold-light)' : '#94A3B8',
-                  fontWeight: activeTab === 'matters' ? 600 : 500,
-                  fontSize: '0.85rem',
-                  cursor: 'pointer',
-                  textAlign: 'left'
-                }}
-              >
-                ⚖️ Matters &amp; Litigation ({matters.length})
-              </button>
-
-              <button
-                onClick={() => setActiveTab('deadlines')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.75rem',
-                  padding: '0.75rem 1rem',
-                  borderRadius: '8px',
-                  border: 'none',
-                  backgroundColor: activeTab === 'deadlines' ? 'var(--admin-navy-surface)' : 'transparent',
-                  color: activeTab === 'deadlines' ? 'var(--admin-gold-light)' : '#94A3B8',
-                  fontWeight: activeTab === 'deadlines' ? 600 : 500,
-                  fontSize: '0.85rem',
-                  cursor: 'pointer',
-                  textAlign: 'left'
-                }}
-              >
-                📅 Deadlines &amp; Calendar ({deadlines.length})
-              </button>
-
-              <button
-                onClick={() => setActiveTab('documents')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.75rem',
-                  padding: '0.75rem 1rem',
-                  borderRadius: '8px',
-                  border: 'none',
-                  backgroundColor: activeTab === 'documents' ? 'var(--admin-navy-surface)' : 'transparent',
-                  color: activeTab === 'documents' ? 'var(--admin-gold-light)' : '#94A3B8',
-                  fontWeight: activeTab === 'documents' ? 600 : 500,
-                  fontSize: '0.85rem',
-                  cursor: 'pointer',
-                  textAlign: 'left'
-                }}
-              >
-                📁 Document Requests ({docRequests.length})
-              </button>
-
-              <button
-                onClick={() => setActiveTab('leads')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.75rem',
-                  padding: '0.75rem 1rem',
-                  borderRadius: '8px',
-                  border: 'none',
-                  backgroundColor: activeTab === 'leads' ? 'var(--admin-navy-surface)' : 'transparent',
-                  color: activeTab === 'leads' ? 'var(--admin-gold-light)' : '#94A3B8',
-                  fontWeight: activeTab === 'leads' ? 600 : 500,
-                  fontSize: '0.85rem',
-                  cursor: 'pointer',
-                  textAlign: 'left'
-                }}
-              >
-                🎯 CRM &amp; Website Leads ({leads.length})
-              </button>
-
-              <button
-                onClick={() => setActiveTab('research')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.75rem',
-                  padding: '0.75rem 1rem',
-                  borderRadius: '8px',
-                  border: 'none',
-                  backgroundColor: activeTab === 'research' ? 'var(--admin-navy-surface)' : 'transparent',
-                  color: activeTab === 'research' ? 'var(--admin-gold-light)' : '#94A3B8',
-                  fontWeight: activeTab === 'research' ? 600 : 500,
-                  fontSize: '0.85rem',
-                  cursor: 'pointer',
-                  textAlign: 'left'
-                }}
-              >
-                📚 Research &amp; Knowledge ({knowledgeBase.length})
-              </button>
-            </>
-          )}
-
-          {/* Intern Sandbox Tab */}
+          {/* Tab 1: Client Consultation Bookings */}
           <button
-            onClick={() => setActiveTab('intern')}
+            onClick={() => setActiveTab('consultations')}
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '0.75rem',
+              justifyContent: 'space-between',
               padding: '0.75rem 1rem',
               borderRadius: '8px',
               border: 'none',
-              backgroundColor: activeTab === 'intern' ? 'var(--admin-navy-surface)' : 'transparent',
-              color: activeTab === 'intern' ? 'var(--admin-gold-light)' : '#94A3B8',
-              fontWeight: activeTab === 'intern' ? 600 : 500,
+              backgroundColor: activeTab === 'consultations' ? 'var(--admin-navy-surface)' : 'transparent',
+              color: activeTab === 'consultations' ? 'var(--admin-gold-light)' : '#CBD5E1',
+              fontWeight: activeTab === 'consultations' ? 700 : 500,
               fontSize: '0.85rem',
               cursor: 'pointer',
               textAlign: 'left'
             }}
           >
-            🎓 Internship Workspace
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              📋 Client Bookings
+            </span>
+            <span style={{
+              backgroundColor: activeTab === 'consultations' ? 'var(--admin-gold)' : 'rgba(255,255,255,0.1)',
+              color: activeTab === 'consultations' ? 'var(--admin-navy-dark)' : '#FFF',
+              padding: '0.15rem 0.5rem',
+              borderRadius: '999px',
+              fontSize: '0.72rem',
+              fontWeight: 700
+            }}>
+              {consultations.length}
+            </span>
+          </button>
+
+          {/* Tab 2: ATS Job Applications */}
+          <button
+            onClick={() => setActiveTab('jobs')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '0.75rem 1rem',
+              borderRadius: '8px',
+              border: 'none',
+              backgroundColor: activeTab === 'jobs' ? 'var(--admin-navy-surface)' : 'transparent',
+              color: activeTab === 'jobs' ? 'var(--admin-gold-light)' : '#CBD5E1',
+              fontWeight: activeTab === 'jobs' ? 700 : 500,
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              textAlign: 'left'
+            }}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              💼 Job Applications
+            </span>
+            <span style={{
+              backgroundColor: activeTab === 'jobs' ? 'var(--admin-gold)' : 'rgba(255,255,255,0.1)',
+              color: activeTab === 'jobs' ? 'var(--admin-navy-dark)' : '#FFF',
+              padding: '0.15rem 0.5rem',
+              borderRadius: '999px',
+              fontSize: '0.72rem',
+              fontWeight: 700
+            }}>
+              {jobApplications.length}
+            </span>
+          </button>
+
+          {/* Tab 3: Internship ATS */}
+          <button
+            onClick={() => setActiveTab('internships')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '0.75rem 1rem',
+              borderRadius: '8px',
+              border: 'none',
+              backgroundColor: activeTab === 'internships' ? 'var(--admin-navy-surface)' : 'transparent',
+              color: activeTab === 'internships' ? 'var(--admin-gold-light)' : '#CBD5E1',
+              fontWeight: activeTab === 'internships' ? 700 : 500,
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              textAlign: 'left'
+            }}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              🎓 Internship ATS
+            </span>
+            <span style={{
+              backgroundColor: activeTab === 'internships' ? 'var(--admin-gold)' : 'rgba(255,255,255,0.1)',
+              color: activeTab === 'internships' ? 'var(--admin-navy-dark)' : '#FFF',
+              padding: '0.15rem 0.5rem',
+              borderRadius: '999px',
+              fontSize: '0.72rem',
+              fontWeight: 700
+            }}>
+              {internApplications.length}
+            </span>
+          </button>
+
+          {/* Tab 4: CRM Leads & Inquiries */}
+          <button
+            onClick={() => setActiveTab('leads')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '0.75rem 1rem',
+              borderRadius: '8px',
+              border: 'none',
+              backgroundColor: activeTab === 'leads' ? 'var(--admin-navy-surface)' : 'transparent',
+              color: activeTab === 'leads' ? 'var(--admin-gold-light)' : '#CBD5E1',
+              fontWeight: activeTab === 'leads' ? 700 : 500,
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              textAlign: 'left'
+            }}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              🎯 CRM &amp; Inquiries
+            </span>
+            <span style={{
+              backgroundColor: activeTab === 'leads' ? 'var(--admin-gold)' : 'rgba(255,255,255,0.1)',
+              color: activeTab === 'leads' ? 'var(--admin-navy-dark)' : '#FFF',
+              padding: '0.15rem 0.5rem',
+              borderRadius: '999px',
+              fontSize: '0.72rem',
+              fontWeight: 700
+            }}>
+              {leads.length}
+            </span>
+          </button>
+
+          {/* Section Label: Legal Practice Operations */}
+          <div style={{ padding: '1.25rem 0.5rem 0.35rem', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase' }}>
+            Practice Operations
+          </div>
+
+          <button
+            onClick={() => setActiveTab('matters')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '0.75rem 1rem',
+              borderRadius: '8px',
+              border: 'none',
+              backgroundColor: activeTab === 'matters' ? 'var(--admin-navy-surface)' : 'transparent',
+              color: activeTab === 'matters' ? 'var(--admin-gold-light)' : '#94A3B8',
+              fontWeight: activeTab === 'matters' ? 700 : 500,
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              textAlign: 'left'
+            }}
+          >
+            <span>⚖️ Active Matters</span>
+            <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>{matters.length}</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('deadlines')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '0.75rem 1rem',
+              borderRadius: '8px',
+              border: 'none',
+              backgroundColor: activeTab === 'deadlines' ? 'var(--admin-navy-surface)' : 'transparent',
+              color: activeTab === 'deadlines' ? 'var(--admin-gold-light)' : '#94A3B8',
+              fontWeight: activeTab === 'deadlines' ? 700 : 500,
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              textAlign: 'left'
+            }}
+          >
+            <span>📅 Deadlines &amp; Calendar</span>
+            <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>{deadlines.length}</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('documents')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '0.75rem 1rem',
+              borderRadius: '8px',
+              border: 'none',
+              backgroundColor: activeTab === 'documents' ? 'var(--admin-navy-surface)' : 'transparent',
+              color: activeTab === 'documents' ? 'var(--admin-gold-light)' : '#94A3B8',
+              fontWeight: activeTab === 'documents' ? 700 : 500,
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              textAlign: 'left'
+            }}
+          >
+            <span>📁 Client Documents</span>
+            <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>{docRequests.length}</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('research')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '0.75rem 1rem',
+              borderRadius: '8px',
+              border: 'none',
+              backgroundColor: activeTab === 'research' ? 'var(--admin-navy-surface)' : 'transparent',
+              color: activeTab === 'research' ? 'var(--admin-gold-light)' : '#94A3B8',
+              fontWeight: activeTab === 'research' ? 700 : 500,
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              textAlign: 'left'
+            }}
+          >
+            <span>📚 Research &amp; Precedents</span>
+            <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>{knowledgeBase.length}</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('intern')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.6rem',
+              padding: '0.75rem 1rem',
+              borderRadius: '8px',
+              border: 'none',
+              backgroundColor: activeTab === 'intern' ? 'var(--admin-navy-surface)' : 'transparent',
+              color: activeTab === 'intern' ? 'var(--admin-gold-light)' : '#94A3B8',
+              fontWeight: activeTab === 'intern' ? 700 : 500,
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              textAlign: 'left'
+            }}
+          >
+            <span>🎓 Intern Daily Log</span>
           </button>
         </nav>
 
-        {/* User Info / Profile in Sidebar Footer */}
+        {/* Sidebar Footer */}
         <div style={{ padding: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)', fontSize: '0.75rem', color: '#94A3B8' }}>
-          <div>Database & Storage:</div>
-          <div style={{ color: '#22C55E', fontWeight: 600 }}>● PostgreSQL 17.11 Live</div>
-          <div style={{ marginTop: '0.35rem' }}>Airtable Base Sync:</div>
-          <a
-            href="https://airtable.com/applCjQYUgSTHSXcg"
-            target="_blank"
-            rel="noreferrer"
-            style={{ color: '#38BDF8', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
-          >
-            ● Rebelwing Base Live ↗
-          </a>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+            <span>Database:</span>
+            <span style={{ color: '#22C55E', fontWeight: 600 }}>● PostgreSQL Live</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>Airtable Sync:</span>
+            <a
+              href="https://airtable.com/applCjQYUgSTHSXcg"
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: '#38BDF8', fontWeight: 600, textDecoration: 'none' }}
+            >
+              Base Live ↗
+            </a>
+          </div>
         </div>
       </aside>
 
+      {/* ========================================================= */}
       {/* 2. MAIN WORKSPACE */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      {/* ========================================================= */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         
-        {/* Top Header with Role Switcher */}
+        {/* Top Header */}
         <header style={{
           backgroundColor: '#FFFFFF',
           padding: '1rem 2rem',
           borderBottom: '1px solid var(--admin-border)',
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'center'
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '1rem'
         }}>
           <div>
-            <h1 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--admin-navy)' }}>
-              {activeRole === 'super_admin' ? 'Managing Partner Executive Suite' :
-               activeRole === 'lawyer' ? 'Senior Advocate Workspace' :
-               activeRole === 'paralegal' ? 'Legal Executive Portal' : 'Sandboxed Intern Workspace'}
+            <h1 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--admin-navy)', margin: 0 }}>
+              {activeTab === 'consultations' ? '📋 Client Consultations & Appointment Requests' :
+               activeTab === 'jobs' ? '💼 Legal Executive Job Applications (ATS)' :
+               activeTab === 'internships' ? '🎓 Internship Applications & Candidates (ATS)' :
+               activeTab === 'leads' ? '🎯 Website Leads & Contact Inquiries' :
+               activeTab === 'matters' ? '⚖️ Active Legal Matters & Case Registry' :
+               activeTab === 'deadlines' ? '📅 Statutory Deadlines & Calendar' :
+               activeTab === 'documents' ? '📁 Client Document Checklists' :
+               activeTab === 'research' ? '📚 Assigned Legal Research & Precedents' : '🎓 Intern Sandbox Workspace'}
             </h1>
-            <div style={{ fontSize: '0.75rem', color: 'var(--admin-text-muted)' }}>
-              Rebel Wing Council Operating System • Advanced Legal Modules Active
+            <div style={{ fontSize: '0.78rem', color: 'var(--admin-text-muted)', marginTop: '2px' }}>
+              Live ingestion from User Portal &bull; PostgreSQL 17.11 Connected &bull; Real-time ATS sync
             </div>
           </div>
 
-          {/* Role Toggle Selector */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--admin-text-muted)' }}>
-              Switch Role View:
-            </span>
+          {/* Quick Actions & Role Switcher */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            
+            {/* Refresh Button */}
+            <button
+              onClick={loadData}
+              disabled={isRefreshing}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                padding: '0.45rem 0.85rem',
+                borderRadius: '8px',
+                border: '1px solid var(--admin-border)',
+                backgroundColor: '#FFFFFF',
+                color: 'var(--admin-navy)',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+              title="Refresh all submissions from database"
+            >
+              <span>{isRefreshing ? '⏳' : '⚡'}</span>
+              <span>{isRefreshing ? 'Refreshing...' : 'Refresh Live Data'}</span>
+            </button>
+
+            {/* Role Switcher */}
             <select
               value={activeRole}
               onChange={e => {
                 setActiveRole(e.target.value);
                 if (e.target.value === 'intern') setActiveTab('intern');
-                else if (activeTab === 'intern') setActiveTab('matters');
+                else if (activeTab === 'intern') setActiveTab('consultations');
               }}
               style={{
                 padding: '0.45rem 0.85rem',
                 borderRadius: '8px',
                 border: '1.5px solid var(--admin-border-gold)',
-                fontSize: '0.85rem',
+                fontSize: '0.82rem',
                 fontWeight: 600,
                 color: 'var(--admin-navy)',
-                backgroundColor: 'var(--admin-card-bg)',
+                backgroundColor: '#FFFFFF',
                 cursor: 'pointer'
               }}
             >
@@ -470,7 +695,6 @@ export default function AdminDashboard() {
                 setIsAuthenticated(false);
                 setLoginError('');
               }}
-              title="Sign Out of Operating System"
               style={{
                 padding: '0.45rem 0.85rem',
                 borderRadius: '8px',
@@ -482,47 +706,595 @@ export default function AdminDashboard() {
                 cursor: 'pointer'
               }}
             >
-              Sign Out ↗
+              Sign Out
             </button>
           </div>
         </header>
 
-        {/* Dashboard Content */}
+        {/* Dashboard Body */}
         <main style={{ padding: '2rem', flex: 1, overflowY: 'auto' }}>
           
           {/* Top Metric Cards */}
-          {activeRole !== 'intern' && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.25rem', marginBottom: '2rem' }}>
-              <div style={{ backgroundColor: '#FFFFFF', padding: '1.25rem', borderRadius: '12px', border: '1px solid var(--admin-border)', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--admin-text-muted)' }}>ACTIVE MATTERS</div>
-                <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--admin-navy)', marginTop: '0.25rem' }}>{matters.length}</div>
-                <div style={{ fontSize: '0.7rem', color: '#15803D', marginTop: '0.25rem' }}>100% On Schedule</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.25rem', marginBottom: '2rem' }}>
+            
+            <div
+              onClick={() => setActiveTab('consultations')}
+              style={{
+                backgroundColor: '#FFFFFF',
+                padding: '1.25rem',
+                borderRadius: '12px',
+                border: activeTab === 'consultations' ? '2px solid var(--admin-gold)' : '1px solid var(--admin-border)',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                cursor: 'pointer'
+              }}
+            >
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--admin-text-muted)' }}>CLIENT CONSULTATIONS</div>
+              <div style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--admin-navy)', marginTop: '0.25rem' }}>
+                {consultations.length}
               </div>
-
-              <div style={{ backgroundColor: '#FFFFFF', padding: '1.25rem', borderRadius: '12px', border: '1px solid var(--admin-border)', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--admin-text-muted)' }}>UPCOMING DEADLINES</div>
-                <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#B45309', marginTop: '0.25rem' }}>{deadlines.length}</div>
-                <div style={{ fontSize: '0.7rem', color: '#B45309', marginTop: '0.25rem' }}>ROC Filing in 5 Days</div>
+              <div style={{ fontSize: '0.72rem', color: '#16A34A', marginTop: '0.25rem', fontWeight: 600 }}>
+                ● Real-time client bookings
               </div>
+            </div>
 
-              <div style={{ backgroundColor: '#FFFFFF', padding: '1.25rem', borderRadius: '12px', border: '1px solid var(--admin-border)', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--admin-text-muted)' }}>PENDING DOC REVIEWS</div>
-                <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#1D4ED8', marginTop: '0.25rem' }}>
-                  {docRequests.filter(d => d.status === 'Uploaded').length || docRequests.length}
+            <div
+              onClick={() => setActiveTab('jobs')}
+              style={{
+                backgroundColor: '#FFFFFF',
+                padding: '1.25rem',
+                borderRadius: '12px',
+                border: activeTab === 'jobs' ? '2px solid var(--admin-gold)' : '1px solid var(--admin-border)',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                cursor: 'pointer'
+              }}
+            >
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--admin-text-muted)' }}>JOB APPLICATIONS (ATS)</div>
+              <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#B45309', marginTop: '0.25rem' }}>
+                {jobApplications.length}
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#B45309', marginTop: '0.25rem', fontWeight: 600 }}>
+                ● Full-time legal candidates
+              </div>
+            </div>
+
+            <div
+              onClick={() => setActiveTab('internships')}
+              style={{
+                backgroundColor: '#FFFFFF',
+                padding: '1.25rem',
+                borderRadius: '12px',
+                border: activeTab === 'internships' ? '2px solid var(--admin-gold)' : '1px solid var(--admin-border)',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                cursor: 'pointer'
+              }}
+            >
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--admin-text-muted)' }}>INTERNSHIP CANDIDATES</div>
+              <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#2563EB', marginTop: '0.25rem' }}>
+                {internApplications.length}
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#2563EB', marginTop: '0.25rem', fontWeight: 600 }}>
+                ● University trainee profiles
+              </div>
+            </div>
+
+            <div
+              onClick={() => setActiveTab('leads')}
+              style={{
+                backgroundColor: '#FFFFFF',
+                padding: '1.25rem',
+                borderRadius: '12px',
+                border: activeTab === 'leads' ? '2px solid var(--admin-gold)' : '1px solid var(--admin-border)',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                cursor: 'pointer'
+              }}
+            >
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--admin-text-muted)' }}>TOTAL CRM LEADS &amp; MSGS</div>
+              <div style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--admin-gold-dark)', marginTop: '0.25rem' }}>
+                {leads.length}
+              </div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--admin-text-muted)', marginTop: '0.25rem', fontWeight: 600 }}>
+                ● Website &amp; contact form
+              </div>
+            </div>
+
+          </div>
+
+          {/* ========================================================= */}
+          {/* TAB 1: CLIENT CONSULTATION BOOKINGS */}
+          {/* ========================================================= */}
+          {activeTab === 'consultations' && (
+            <div style={{ backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid var(--admin-border)', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+              
+              <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--admin-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--admin-navy)', margin: 0 }}>
+                    Client Consultation Requests ({consultations.length})
+                  </h2>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--admin-text-muted)', marginTop: '2px' }}>
+                    Appointments booked by clients via user website with preferred date, time slot, mode, and matter notes.
+                  </div>
                 </div>
-                <div style={{ fontSize: '0.7rem', color: '#1D4ED8', marginTop: '0.25rem' }}>Client Checklists Active</div>
+
+                <a
+                  href="https://airtable.com/applCjQYUgSTHSXcg"
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    backgroundColor: '#0284C7',
+                    color: '#FFFFFF',
+                    padding: '0.45rem 0.9rem',
+                    borderRadius: '8px',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    textDecoration: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem'
+                  }}
+                >
+                  ⚡ Open Airtable CRM ↗
+                </a>
               </div>
 
-              <div style={{ backgroundColor: '#FFFFFF', padding: '1.25rem', borderRadius: '12px', border: '1px solid var(--admin-border)', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--admin-text-muted)' }}>CRM WEBSITE LEADS</div>
-                <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--admin-gold-dark)', marginTop: '0.25rem' }}>{leads.length}</div>
-                <div style={{ fontSize: '0.7rem', color: 'var(--admin-text-muted)', marginTop: '0.25rem' }}>Auto-ingestion active</div>
-              </div>
+              {consultations.length === 0 ? (
+                <div style={{ padding: '3.5rem', textAlign: 'center', color: 'var(--admin-text-muted)' }}>
+                  <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>📋</div>
+                  <div style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--admin-navy)' }}>No consultation requests yet</div>
+                  <p style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>
+                    Submissions from the user website consultation modal will instantly appear here with full date, time, and client notes.
+                  </p>
+                </div>
+              ) : (
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Client Name</th>
+                      <th>Contact Details</th>
+                      <th>Practice Area</th>
+                      <th>Scheduled Slot</th>
+                      <th>Mode</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {consultations.map((c, idx) => (
+                      <tr key={idx}>
+                        <td>
+                          <div style={{ fontWeight: 700, color: 'var(--admin-navy)' }}>{c.client_name}</div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--admin-text-muted)' }}>
+                            Submitted: {new Date(c.created_at || Date.now()).toLocaleDateString()}
+                          </div>
+                        </td>
+                        <td>
+                          <div style={{ fontWeight: 600 }}>{c.email}</div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--admin-text-muted)' }}>{c.phone}</div>
+                        </td>
+                        <td>
+                          <span className="badge badge-gold">{c.practice_area || 'General Legal Advice'}</span>
+                        </td>
+                        <td>
+                          <div style={{ fontWeight: 700, color: 'var(--admin-navy)' }}>
+                            📅 {c.consultation_date ? new Date(c.consultation_date).toLocaleDateString() : 'TBD'}
+                          </div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--admin-text-muted)' }}>
+                            ⏰ {c.time_slot}
+                          </div>
+                        </td>
+                        <td>
+                          <span className="badge badge-info">{c.mode}</span>
+                        </td>
+                        <td>
+                          <select
+                            value={c.status || 'Scheduled'}
+                            onChange={e => handleUpdateConsultationStatus(c.id, e.target.value)}
+                            style={{
+                              padding: '0.3rem 0.5rem',
+                              borderRadius: '6px',
+                              border: '1px solid var(--admin-border)',
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              backgroundColor: c.status === 'Completed' ? '#DCFCE7' : c.status === 'Confirmed' ? '#DBEAFE' : '#FEF3C7',
+                              color: c.status === 'Completed' ? '#15803D' : c.status === 'Confirmed' ? '#1D4ED8' : '#B45309',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <option value="Scheduled">Scheduled</option>
+                            <option value="Confirmed">Confirmed</option>
+                            <option value="Completed">Completed</option>
+                            <option value="Cancelled">Cancelled</option>
+                          </select>
+                        </td>
+                        <td>
+                          <button
+                            onClick={() => {
+                              setSelectedItem(c);
+                              setSelectedType('consultation');
+                            }}
+                            style={{
+                              padding: '0.35rem 0.75rem',
+                              backgroundColor: 'var(--admin-navy)',
+                              color: '#FFFFFF',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            View Details 🔍
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
             </div>
           )}
 
-          {/* TAB 1: MATTERS & LITIGATION */}
-          {activeTab === 'matters' && activeRole !== 'intern' && (
+          {/* ========================================================= */}
+          {/* TAB 2: JOB APPLICATIONS (ATS) */}
+          {/* ========================================================= */}
+          {activeTab === 'jobs' && (
+            <div style={{ backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid var(--admin-border)', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+              
+              <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--admin-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--admin-navy)', margin: 0 }}>
+                    Legal Executive Job Applications ({jobApplications.length})
+                  </h2>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--admin-text-muted)', marginTop: '2px' }}>
+                    Applicants submitted through website ATS with Bar Council registration and practice experience.
+                  </div>
+                </div>
+              </div>
+
+              {jobApplications.length === 0 ? (
+                <div style={{ padding: '3.5rem', textAlign: 'center', color: 'var(--admin-text-muted)' }}>
+                  <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>💼</div>
+                  <div style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--admin-navy)' }}>No job applications yet</div>
+                  <p style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>
+                    Lawyers applying on the website ATS under Full-Time Legal Executive will appear here automatically.
+                  </p>
+                </div>
+              ) : (
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Candidate Name</th>
+                      <th>Contact Details</th>
+                      <th>Role Applied</th>
+                      <th>Bar Council / Qualification</th>
+                      <th>Experience / Notes</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {jobApplications.map((app, idx) => (
+                      <tr key={idx}>
+                        <td>
+                          <div style={{ fontWeight: 700, color: 'var(--admin-navy)' }}>{app.name}</div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--admin-text-muted)' }}>
+                            {new Date(app.created_at || Date.now()).toLocaleDateString()}
+                          </div>
+                        </td>
+                        <td>
+                          <div style={{ fontWeight: 600 }}>{app.email}</div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--admin-text-muted)' }}>{app.phone}</div>
+                        </td>
+                        <td>
+                          <span className="badge badge-gold">{app.role}</span>
+                        </td>
+                        <td style={{ fontWeight: 600, color: 'var(--admin-navy)' }}>
+                          {app.qualification || 'Bar Enrolled'}
+                        </td>
+                        <td>
+                          <div style={{ maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
+                            {app.resume_notes || app.experience || 'Submitted via ATS'}
+                          </div>
+                        </td>
+                        <td>
+                          <select
+                            value={app.status || 'New'}
+                            onChange={e => handleUpdateApplicationStatus(app.id, e.target.value)}
+                            style={{
+                              padding: '0.3rem 0.5rem',
+                              borderRadius: '6px',
+                              border: '1px solid var(--admin-border)',
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              backgroundColor: app.status === 'Shortlisted' ? '#DCFCE7' : app.status === 'Interview Scheduled' ? '#DBEAFE' : app.status === 'Rejected' ? '#FEE2E2' : '#FEF3C7',
+                              color: app.status === 'Shortlisted' ? '#15803D' : app.status === 'Interview Scheduled' ? '#1D4ED8' : app.status === 'Rejected' ? '#B91C1C' : '#B45309',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <option value="New">New</option>
+                            <option value="Under Review">Under Review</option>
+                            <option value="Shortlisted">Shortlisted</option>
+                            <option value="Interview Scheduled">Interview Scheduled</option>
+                            <option value="Hired">Hired</option>
+                            <option value="Rejected">Rejected</option>
+                          </select>
+                        </td>
+                        <td>
+                          <button
+                            onClick={() => {
+                              setSelectedItem(app);
+                              setSelectedType('job');
+                            }}
+                            style={{
+                              padding: '0.35rem 0.75rem',
+                              backgroundColor: 'var(--admin-navy)',
+                              color: '#FFFFFF',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Inspect Candidate 🔍
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+            </div>
+          )}
+
+          {/* ========================================================= */}
+          {/* TAB 3: INTERNSHIP APPLICATIONS (ATS) */}
+          {/* ========================================================= */}
+          {activeTab === 'internships' && (
+            <div style={{ backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid var(--admin-border)', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+              
+              <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--admin-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--admin-navy)', margin: 0 }}>
+                    Internship Program Applications ({internApplications.length})
+                  </h2>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--admin-text-muted)', marginTop: '2px' }}>
+                    Law students and graduates applying for mentored internship positions at Rebel Wing Council.
+                  </div>
+                </div>
+              </div>
+
+              {internApplications.length === 0 ? (
+                <div style={{ padding: '3.5rem', textAlign: 'center', color: 'var(--admin-text-muted)' }}>
+                  <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🎓</div>
+                  <div style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--admin-navy)' }}>No internship applications yet</div>
+                  <p style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>
+                    Law school candidates applying under the Internship Program will be automatically collected here.
+                  </p>
+                </div>
+              ) : (
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Intern Candidate</th>
+                      <th>Contact Details</th>
+                      <th>University / Law College</th>
+                      <th>Application Notes</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {internApplications.map((intern, idx) => (
+                      <tr key={idx}>
+                        <td>
+                          <div style={{ fontWeight: 700, color: 'var(--admin-navy)' }}>{intern.name}</div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--admin-text-muted)' }}>
+                            {new Date(intern.created_at || Date.now()).toLocaleDateString()}
+                          </div>
+                        </td>
+                        <td>
+                          <div style={{ fontWeight: 600 }}>{intern.email}</div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--admin-text-muted)' }}>{intern.phone}</div>
+                        </td>
+                        <td style={{ fontWeight: 600, color: 'var(--admin-navy)' }}>
+                          {intern.qualification || 'Law Student'}
+                        </td>
+                        <td>
+                          <div style={{ maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
+                            {intern.resume_notes || intern.experience || 'Mentorship Application'}
+                          </div>
+                        </td>
+                        <td>
+                          <select
+                            value={intern.status || 'New'}
+                            onChange={e => handleUpdateApplicationStatus(intern.id, e.target.value)}
+                            style={{
+                              padding: '0.3rem 0.5rem',
+                              borderRadius: '6px',
+                              border: '1px solid var(--admin-border)',
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              backgroundColor: intern.status === 'Shortlisted' ? '#DCFCE7' : intern.status === 'Interview Scheduled' ? '#DBEAFE' : intern.status === 'Rejected' ? '#FEE2E2' : '#FEF3C7',
+                              color: intern.status === 'Shortlisted' ? '#15803D' : intern.status === 'Interview Scheduled' ? '#1D4ED8' : intern.status === 'Rejected' ? '#B91C1C' : '#B45309',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <option value="New">New</option>
+                            <option value="Under Review">Under Review</option>
+                            <option value="Shortlisted">Shortlisted</option>
+                            <option value="Interview Scheduled">Interview Scheduled</option>
+                            <option value="Selected">Selected</option>
+                            <option value="Rejected">Rejected</option>
+                          </select>
+                        </td>
+                        <td>
+                          <button
+                            onClick={() => {
+                              setSelectedItem(intern);
+                              setSelectedType('internship');
+                            }}
+                            style={{
+                              padding: '0.35rem 0.75rem',
+                              backgroundColor: 'var(--admin-navy)',
+                              color: '#FFFFFF',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Inspect Candidate 🔍
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+            </div>
+          )}
+
+          {/* ========================================================= */}
+          {/* TAB 4: CRM LEADS & WEBSITE INQUIRIES */}
+          {/* ========================================================= */}
+          {activeTab === 'leads' && (
+            <div style={{ backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid var(--admin-border)', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+              
+              <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--admin-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--admin-navy)', margin: 0 }}>
+                    CRM Website Leads &amp; Direct Messages ({leads.length})
+                  </h2>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--admin-text-muted)', marginTop: '2px' }}>
+                    All user inquiries submitted through contact forms, consultation requests, or AI triage.
+                  </div>
+                </div>
+
+                <a
+                  href="https://airtable.com/applCjQYUgSTHSXcg"
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    backgroundColor: '#0284C7',
+                    color: '#FFFFFF',
+                    padding: '0.45rem 0.9rem',
+                    borderRadius: '8px',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    textDecoration: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem'
+                  }}
+                >
+                  ⚡ Open in Airtable CRM ↗
+                </a>
+              </div>
+
+              {leads.length === 0 ? (
+                <div style={{ padding: '3.5rem', textAlign: 'center', color: 'var(--admin-text-muted)' }}>
+                  <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🎯</div>
+                  <div style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--admin-navy)' }}>No CRM leads recorded yet</div>
+                  <p style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>
+                    Any message entered on the website contact form or consultation scheduler will populate here in real-time.
+                  </p>
+                </div>
+              ) : (
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Lead Name</th>
+                      <th>Contact Details</th>
+                      <th>Service / Subject</th>
+                      <th>Message Details</th>
+                      <th>Source</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {leads.map((l, idx) => (
+                      <tr key={idx}>
+                        <td>
+                          <div style={{ fontWeight: 700, color: 'var(--admin-navy)' }}>{l.name}</div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--admin-text-muted)' }}>
+                            {new Date(l.created_at || Date.now()).toLocaleDateString()}
+                          </div>
+                        </td>
+                        <td>
+                          <div style={{ fontWeight: 600 }}>{l.email}</div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--admin-text-muted)' }}>{l.phone}</div>
+                        </td>
+                        <td>
+                          <span className="badge badge-gold">{l.service || 'General Consultation'}</span>
+                        </td>
+                        <td>
+                          <div style={{ maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
+                            {l.message || 'No details provided'}
+                          </div>
+                        </td>
+                        <td>
+                          <span className="badge badge-info">{l.source}</span>
+                        </td>
+                        <td>
+                          <select
+                            value={l.status || 'New'}
+                            onChange={e => handleUpdateLeadStatus(l.id, e.target.value)}
+                            style={{
+                              padding: '0.3rem 0.5rem',
+                              borderRadius: '6px',
+                              border: '1px solid var(--admin-border)',
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              backgroundColor: l.status === 'Converted' ? '#DCFCE7' : l.status === 'Contacted' ? '#DBEAFE' : '#FEF3C7',
+                              color: l.status === 'Converted' ? '#15803D' : l.status === 'Contacted' ? '#1D4ED8' : '#B45309',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <option value="New">New</option>
+                            <option value="Contacted">Contacted</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Converted">Converted</option>
+                            <option value="Disqualified">Disqualified</option>
+                          </select>
+                        </td>
+                        <td>
+                          <button
+                            onClick={() => {
+                              setSelectedItem(l);
+                              setSelectedType('lead');
+                            }}
+                            style={{
+                              padding: '0.35rem 0.75rem',
+                              backgroundColor: 'var(--admin-navy)',
+                              color: '#FFFFFF',
+                              border: 'none',
+                              borderRadius: '6px',
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            View Message 🔍
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+            </div>
+          )}
+
+          {/* ========================================================= */}
+          {/* TAB 5: ACTIVE MATTERS & CASE REGISTRY */}
+          {/* ========================================================= */}
+          {activeTab === 'matters' && (
             <div style={{ backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid var(--admin-border)', overflow: 'hidden' }}>
               <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--admin-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
@@ -587,8 +1359,10 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {/* TAB 2: DEADLINES & LEGAL CALENDAR */}
-          {activeTab === 'deadlines' && activeRole !== 'intern' && (
+          {/* ========================================================= */}
+          {/* TAB 6: DEADLINES & LEGAL CALENDAR */}
+          {/* ========================================================= */}
+          {activeTab === 'deadlines' && (
             <div style={{ backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid var(--admin-border)', overflow: 'hidden' }}>
               <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--admin-border)' }}>
                 <h2 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--admin-navy)' }}>Legal Calendar &amp; Statutory Deadlines</h2>
@@ -622,8 +1396,10 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {/* TAB 3: DOCUMENT REQUESTS VAULT */}
-          {activeTab === 'documents' && activeRole !== 'intern' && (
+          {/* ========================================================= */}
+          {/* TAB 7: DOCUMENT REQUESTS VAULT */}
+          {/* ========================================================= */}
+          {activeTab === 'documents' && (
             <div style={{ backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid var(--admin-border)', overflow: 'hidden' }}>
               <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--admin-border)' }}>
                 <h2 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--admin-navy)' }}>Client Document Checklists &amp; Approvals</h2>
@@ -677,75 +1453,11 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {/* TAB 4: LEADS & CRM */}
-          {activeTab === 'leads' && activeRole !== 'intern' && (
-            <div style={{ backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid var(--admin-border)', overflow: 'hidden' }}>
-              <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--admin-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <h2 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--admin-navy)' }}>Website Inquiries &amp; Consultation Leads</h2>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--admin-text-muted)' }}>Automatically ingested from website consultation scheduler &amp; synced to Airtable</div>
-                </div>
-                <a
-                  href="https://airtable.com/applCjQYUgSTHSXcg"
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{
-                    backgroundColor: '#0284C7',
-                    color: '#FFFFFF',
-                    padding: '0.45rem 0.9rem',
-                    borderRadius: '8px',
-                    fontSize: '0.8rem',
-                    fontWeight: 600,
-                    textDecoration: 'none',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.4rem',
-                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                  }}
-                >
-                  ⚡ Open in Airtable CRM ↗
-                </a>
-              </div>
-
-              {leads.length === 0 ? (
-                <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--admin-text-muted)', fontSize: '0.9rem' }}>
-                  No leads yet. Website submissions from port 3000 will appear here automatically in real time!
-                </div>
-              ) : (
-                <table className="admin-table">
-                  <thead>
-                    <tr>
-                      <th>Lead Name</th>
-                      <th>Contact Details</th>
-                      <th>Service Requested</th>
-                      <th>Source</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {leads.map((l, idx) => (
-                      <tr key={idx}>
-                        <td style={{ fontWeight: 600 }}>{l.name}</td>
-                        <td>
-                          <div>{l.email}</div>
-                          <div style={{ fontSize: '0.7rem', color: 'var(--admin-text-muted)' }}>{l.phone}</div>
-                        </td>
-                        <td>{l.service}</td>
-                        <td><span className="badge badge-gold">{l.source}</span></td>
-                        <td><span className="badge badge-info">{l.status}</span></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          )}
-
-          {/* TAB 5: RESEARCH & KNOWLEDGE BASE */}
-          {activeTab === 'research' && activeRole !== 'intern' && (
+          {/* ========================================================= */}
+          {/* TAB 8: RESEARCH & KNOWLEDGE BASE */}
+          {/* ========================================================= */}
+          {activeTab === 'research' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-              
-              {/* Research Tasks Pipeline */}
               <div style={{ backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid var(--admin-border)', overflow: 'hidden' }}>
                 <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--admin-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
@@ -795,7 +1507,7 @@ export default function AdminDashboard() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
                   {knowledgeBase.map((kb, i) => (
                     <div key={i} style={{ border: '1px solid var(--admin-border)', borderRadius: '10px', padding: '1.25rem', backgroundColor: 'var(--admin-bg)' }}>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--admin-gold-dark)', fontWeight: 700 }}>{kb.court_or_authority} • {kb.citation}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--admin-gold-dark)', fontWeight: 700 }}>{kb.court_or_authority} &bull; {kb.citation}</div>
                       <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--admin-navy)', margin: '0.35rem 0' }}>{kb.title}</div>
                       <p style={{ fontSize: '0.8rem', color: 'var(--admin-text-muted)', lineHeight: 1.45, marginBottom: '0.75rem' }}>{kb.summary}</p>
                       <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--admin-navy)' }}>Key Holding: {kb.key_takeaways}</div>
@@ -803,11 +1515,12 @@ export default function AdminDashboard() {
                   ))}
                 </div>
               </div>
-
             </div>
           )}
 
-          {/* TAB 6: INTERNSHIP & RESEARCH SANDBOX */}
+          {/* ========================================================= */}
+          {/* TAB 9: INTERN WORKSPACE */}
+          {/* ========================================================= */}
           {activeTab === 'intern' && (
             <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '2rem' }}>
               <div style={{ backgroundColor: '#FFFFFF', borderRadius: '12px', padding: '1.75rem', border: '1px solid var(--admin-border)' }}>
@@ -903,13 +1616,260 @@ export default function AdminDashboard() {
                   🛡️ <strong>Sandbox Security Active:</strong> Intern profiles have strictly restricted access. Unrelated client matters and financial records are automatically shielded as per the SRS.
                 </div>
               </div>
-
             </div>
           )}
 
         </main>
 
       </div>
+
+      {/* ========================================================= */}
+      {/* MODAL: FULL DETAIL SUBMISSION INSPECTION */}
+      {/* ========================================================= */}
+      {selectedItem && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 100,
+          padding: '1.5rem'
+        }}>
+          <div style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: '16px',
+            maxWidth: '620px',
+            width: '100%',
+            padding: '2.5rem',
+            position: 'relative',
+            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+            maxHeight: '90vh',
+            overflowY: 'auto'
+          }}>
+            <button
+              onClick={() => setSelectedItem(null)}
+              style={{
+                position: 'absolute',
+                top: '1.25rem',
+                right: '1.25rem',
+                background: 'transparent',
+                border: 'none',
+                fontSize: '1.4rem',
+                cursor: 'pointer',
+                color: 'var(--admin-text-muted)'
+              }}
+            >
+              ✕
+            </button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '0.5rem' }}>
+              <span style={{ fontSize: '1.5rem' }}>
+                {selectedType === 'consultation' ? '📋' : selectedType === 'job' ? '💼' : selectedType === 'internship' ? '🎓' : '🎯'}
+              </span>
+              <div style={{ fontSize: '0.8rem', color: 'var(--admin-gold-dark)', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                {selectedType === 'consultation' ? 'CLIENT CONSULTATION REQUEST' :
+                 selectedType === 'job' ? 'JOB APPLICATION (ATS)' :
+                 selectedType === 'internship' ? 'INTERNSHIP APPLICATION (ATS)' : 'CRM WEBSITE INQUIRY'}
+              </div>
+            </div>
+
+            <h2 style={{ fontSize: '1.6rem', color: 'var(--admin-navy)', margin: '0 0 1.25rem' }}>
+              {selectedItem.client_name || selectedItem.name}
+            </h2>
+
+            {/* Contact Action Bar */}
+            <div style={{
+              display: 'flex',
+              gap: '1rem',
+              backgroundColor: '#F8FAFC',
+              padding: '1rem 1.25rem',
+              borderRadius: '10px',
+              border: '1px solid var(--admin-border)',
+              marginBottom: '1.5rem',
+              alignItems: 'center',
+              flexWrap: 'wrap'
+            }}>
+              <div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--admin-text-muted)' }}>Email Address:</div>
+                <a href={`mailto:${selectedItem.email}`} style={{ fontWeight: 700, color: 'var(--admin-navy)', fontSize: '0.9rem' }}>
+                  {selectedItem.email}
+                </a>
+              </div>
+              <div style={{ height: '30px', width: '1px', backgroundColor: 'var(--admin-border)' }} />
+              <div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--admin-text-muted)' }}>Phone / Mobile:</div>
+                <a href={`tel:${selectedItem.phone}`} style={{ fontWeight: 700, color: 'var(--admin-navy)', fontSize: '0.9rem' }}>
+                  {selectedItem.phone}
+                </a>
+              </div>
+              <div style={{ marginLeft: 'auto' }}>
+                <a
+                  href={`https://wa.me/${(selectedItem.phone || '').replace(/[^0-9]/g, '')}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    backgroundColor: '#16A34A',
+                    color: '#FFFFFF',
+                    padding: '0.4rem 0.8rem',
+                    borderRadius: '6px',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    textDecoration: 'none',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  💬 WhatsApp
+                </a>
+              </div>
+            </div>
+
+            {/* Submission Detailed Fields */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.25rem' }}>
+              
+              {selectedType === 'consultation' && (
+                <>
+                  <div style={{ backgroundColor: '#F8FAFC', padding: '0.85rem', borderRadius: '8px' }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--admin-text-muted)' }}>Practice Area:</div>
+                    <div style={{ fontWeight: 700, color: 'var(--admin-navy)' }}>{selectedItem.practice_area}</div>
+                  </div>
+                  <div style={{ backgroundColor: '#F8FAFC', padding: '0.85rem', borderRadius: '8px' }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--admin-text-muted)' }}>Consultation Mode:</div>
+                    <div style={{ fontWeight: 700, color: 'var(--admin-navy)' }}>{selectedItem.mode}</div>
+                  </div>
+                  <div style={{ backgroundColor: '#F8FAFC', padding: '0.85rem', borderRadius: '8px' }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--admin-text-muted)' }}>Preferred Date:</div>
+                    <div style={{ fontWeight: 700, color: 'var(--admin-navy)' }}>
+                      {selectedItem.consultation_date ? new Date(selectedItem.consultation_date).toLocaleDateString() : 'N/A'}
+                    </div>
+                  </div>
+                  <div style={{ backgroundColor: '#F8FAFC', padding: '0.85rem', borderRadius: '8px' }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--admin-text-muted)' }}>Preferred Time Slot:</div>
+                    <div style={{ fontWeight: 700, color: 'var(--admin-navy)' }}>{selectedItem.time_slot}</div>
+                  </div>
+                </>
+              )}
+
+              {(selectedType === 'job' || selectedType === 'internship') && (
+                <>
+                  <div style={{ backgroundColor: '#F8FAFC', padding: '0.85rem', borderRadius: '8px' }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--admin-text-muted)' }}>Position / Track:</div>
+                    <div style={{ fontWeight: 700, color: 'var(--admin-navy)' }}>{selectedItem.role}</div>
+                  </div>
+                  <div style={{ backgroundColor: '#F8FAFC', padding: '0.85rem', borderRadius: '8px' }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--admin-text-muted)' }}>Qualification / Roll No:</div>
+                    <div style={{ fontWeight: 700, color: 'var(--admin-navy)' }}>{selectedItem.qualification || 'N/A'}</div>
+                  </div>
+                </>
+              )}
+
+              {selectedType === 'lead' && (
+                <>
+                  <div style={{ backgroundColor: '#F8FAFC', padding: '0.85rem', borderRadius: '8px' }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--admin-text-muted)' }}>Subject / Service:</div>
+                    <div style={{ fontWeight: 700, color: 'var(--admin-navy)' }}>{selectedItem.service}</div>
+                  </div>
+                  <div style={{ backgroundColor: '#F8FAFC', padding: '0.85rem', borderRadius: '8px' }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--admin-text-muted)' }}>Source Channel:</div>
+                    <div style={{ fontWeight: 700, color: 'var(--admin-navy)' }}>{selectedItem.source}</div>
+                  </div>
+                </>
+              )}
+
+            </div>
+
+            {/* Matter Summary or Application Notes */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--admin-navy)', marginBottom: '0.4rem' }}>
+                Full Notes / Message Details:
+              </div>
+              <div style={{
+                backgroundColor: '#F8FAFC',
+                padding: '1.25rem',
+                borderRadius: '8px',
+                border: '1px solid var(--admin-border)',
+                fontSize: '0.88rem',
+                lineHeight: 1.6,
+                color: 'var(--admin-text-main)',
+                whiteSpace: 'pre-wrap'
+              }}>
+                {selectedItem.notes || selectedItem.message || selectedItem.resume_notes || 'No extra notes provided by user.'}
+              </div>
+            </div>
+
+            {/* Status Update & Actions */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--admin-border)', paddingTop: '1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ fontSize: '0.8rem', fontWeight: 700 }}>Current Status:</span>
+                <span className="badge badge-gold">{selectedItem.status || 'New'}</span>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  onClick={() => setSelectedItem(null)}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    border: '1px solid var(--admin-border)',
+                    backgroundColor: 'transparent',
+                    borderRadius: '6px',
+                    fontSize: '0.85rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Close
+                </button>
+
+                {selectedType === 'consultation' && (
+                  <button
+                    onClick={() => {
+                      handleUpdateConsultationStatus(selectedItem.id, 'Confirmed');
+                      setSelectedItem(null);
+                    }}
+                    style={{
+                      padding: '0.5rem 1rem',
+                      backgroundColor: '#16A34A',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '0.85rem',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Confirm Consultation ✓
+                  </button>
+                )}
+
+                {(selectedType === 'job' || selectedType === 'internship') && (
+                  <button
+                    onClick={() => {
+                      handleUpdateApplicationStatus(selectedItem.id, 'Shortlisted');
+                      setSelectedItem(null);
+                    }}
+                    style={{
+                      padding: '0.5rem 1rem',
+                      backgroundColor: 'var(--admin-navy)',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '0.85rem',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Shortlist Candidate ✓
+                  </button>
+                )}
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
 
       {/* Modal: New Matter */}
       {isNewMatterOpen && (

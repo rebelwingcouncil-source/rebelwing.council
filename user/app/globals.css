@@ -1,28 +1,33 @@
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&family=Playfair+Display:ital,wght@0,500;0,600;0,700;0,800;1,600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
 
 :root {
   --primary-navy: #0A192F;
-  --deep-navy: #060F1E;
+  --deep-navy: #060E1A;
   --navy-surface: #10233F;
   --navy-card: #152B4D;
+  --navy-border: #1E3A8A;
   --gold-primary: #C5A869;
-  --gold-light: #E3D1A5;
+  --gold-light: #E5D5AA;
   --gold-dark: #9F8246;
+  --gold-bronze: #B38E46;
+  --gold-accent: #D4AF37;
   --cream-bg: #FCFBF8;
-  --cream-surface: #F5F3ED;
+  --cream-surface: #F6F3EB;
+  --cream-card: #FFFFFF;
   --text-dark: #0F172A;
   --text-slate: #475569;
   --text-muted: #64748B;
-  --border-light: #E2E8F0;
+  --border-light: #E8E5DD;
   --border-gold: rgba(197, 168, 105, 0.35);
   --border-gold-strong: rgba(197, 168, 105, 0.7);
   --gold-gradient: linear-gradient(135deg, #C5A869 0%, #DFCA9B 50%, #B89753 100%);
   --gold-hover: linear-gradient(135deg, #DFCA9B 0%, #EFE1BC 50%, #C5A869 100%);
-  --shadow-sm: 0 2px 8px rgba(10, 25, 47, 0.05);
+  --shadow-sm: 0 2px 8px rgba(10, 25, 47, 0.04);
   --shadow-md: 0 10px 25px -5px rgba(10, 25, 47, 0.08);
-  --shadow-lg: 0 20px 35px -10px rgba(10, 25, 47, 0.15);
-  --shadow-gold: 0 8px 20px rgba(197, 168, 105, 0.25);
-  --font-serif: 'Cinzel', Georgia, serif;
+  --shadow-lg: 0 20px 40px -10px rgba(10, 25, 47, 0.16);
+  --shadow-gold: 0 8px 25px rgba(197, 168, 105, 0.3);
+  --font-serif: 'Playfair Display', 'Cinzel', Georgia, serif;
+  --font-cinzel: 'Cinzel', Georgia, serif;
   --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
@@ -38,12 +43,18 @@ html, body {
   font-family: var(--font-sans);
   scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
-/* Base Headings */
+/* Typography */
 h1, h2, h3, h4, .serif-font {
   font-family: var(--font-serif);
-  letter-spacing: 0.02em;
+  letter-spacing: -0.01em;
+}
+
+.cinzel-font {
+  font-family: var(--font-cinzel);
+  letter-spacing: 0.08em;
 }
 
 a {
@@ -52,83 +63,208 @@ a {
   transition: all 0.2s ease;
 }
 
-/* Gold Gradient Button */
-.btn-gold {
-  background: var(--gold-gradient);
+/* Container */
+.container {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+@media (max-width: 640px) {
+  .container {
+    padding: 0 1rem;
+  }
+}
+
+/* Luxury Law Firm Buttons */
+.btn-gold-nav {
+  background-color: var(--gold-bronze);
+  color: #FFFFFF;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.75rem 1.6rem;
+  border-radius: 4px;
+  border: 1px solid var(--gold-light);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 12px rgba(179, 142, 70, 0.3);
+}
+
+.btn-gold-nav:hover {
+  background-color: #9F7B36;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(179, 142, 70, 0.45);
+}
+
+.btn-hero-navy {
+  background-color: var(--deep-navy);
+  color: #FFFFFF;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.95rem 2rem;
+  border-radius: 4px;
+  border: 1px solid var(--primary-navy);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  transition: all 0.25s ease;
+  box-shadow: 0 8px 20px rgba(6, 14, 26, 0.25);
+}
+
+.btn-hero-navy:hover {
+  background-color: #10233F;
+  transform: translateY(-2px);
+  box-shadow: 0 12px 26px rgba(6, 14, 26, 0.35);
+}
+
+.btn-hero-outline {
+  background-color: #FFFFFF;
   color: var(--deep-navy);
   font-family: var(--font-sans);
-  font-weight: 600;
+  font-weight: 700;
   font-size: 0.95rem;
-  padding: 0.75rem 1.75rem;
-  border-radius: 9999px;
-  border: 1px solid var(--gold-light);
-  box-shadow: var(--shadow-gold);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.95rem 2rem;
+  border-radius: 4px;
+  border: 1.5px solid #CBD5E1;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  justify-content: center;
+  gap: 0.6rem;
+  transition: all 0.25s ease;
 }
 
-.btn-gold:hover {
-  background: var(--gold-hover);
+.btn-hero-outline:hover {
+  border-color: var(--deep-navy);
+  background-color: #F8FAFC;
   transform: translateY(-2px);
-  box-shadow: 0 12px 24px rgba(197, 168, 105, 0.35);
-}
-
-.btn-outline-navy {
-  background: transparent;
-  color: var(--primary-navy);
-  font-weight: 600;
-  font-size: 0.95rem;
-  padding: 0.75rem 1.75rem;
-  border-radius: 9999px;
-  border: 1.5px solid var(--primary-navy);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  transition: all 0.2s ease;
-}
-
-.btn-outline-navy:hover {
-  background: var(--primary-navy);
-  color: #FFFFFF;
 }
 
 .btn-outline-gold {
   background: transparent;
-  color: var(--gold-primary);
-  font-weight: 600;
-  font-size: 0.95rem;
-  padding: 0.75rem 1.75rem;
-  border-radius: 9999px;
+  color: var(--gold-light);
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.75rem 1.6rem;
+  border-radius: 4px;
   border: 1.5px solid var(--gold-primary);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  transition: all 0.2s ease;
+  transition: all 0.25s ease;
 }
 
 .btn-outline-gold:hover {
   background: var(--gold-primary);
   color: var(--deep-navy);
+  transform: translateY(-1px);
+}
+
+/* Practice Area Card */
+.practice-card {
+  background-color: #FFFFFF;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 2.25rem 1.25rem 1.75rem;
+  text-align: center;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+}
+
+.practice-card:hover {
+  transform: translateY(-6px);
+  border-color: var(--gold-primary);
+  box-shadow: 0 16px 32px rgba(197, 168, 105, 0.18);
+}
+
+.practice-card-icon {
+  font-size: 2.25rem;
+  margin-bottom: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: #F8F6F0;
+  transition: all 0.3s ease;
+}
+
+.practice-card:hover .practice-card-icon {
+  background: var(--gold-primary);
+  transform: scale(1.08);
+}
+
+.practice-card-divider {
+  width: 32px;
+  height: 2px;
+  background-color: var(--gold-primary);
+  margin: 0.85rem auto 0;
+  transition: width 0.3s ease;
+}
+
+.practice-card:hover .practice-card-divider {
+  width: 50px;
+}
+
+/* Floating Stats Badge */
+.hero-stats-badge {
+  background: linear-gradient(165deg, rgba(10, 25, 47, 0.96) 0%, rgba(6, 14, 26, 0.98) 100%);
+  border: 1px solid var(--border-gold);
+  border-radius: 12px;
+  padding: 1.75rem 2rem;
+  color: #FFFFFF;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(12px);
+  width: 250px;
 }
 
 /* Animations */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 .animate-fade-in {
-  animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: fadeIn 0.5s ease forwards;
 }
 
-/* Container */
-.container {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 0 1.5rem;
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #F1F5F9;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--gold-primary);
 }
